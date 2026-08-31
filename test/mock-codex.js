@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 const args = process.argv.slice(2);
 const rIdx = args.indexOf('resume');
 const threadId = rIdx > -1 ? args[rIdx + 1] : crypto.randomUUID();
+const mIdx = args.indexOf('-m');
+const model = mIdx > -1 ? args[mIdx + 1] : 'codex-default';
 
 const out = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -20,6 +22,6 @@ process.stdin.on('end', async () => {
   await sleep(400);
   out({ type: 'item.completed', item: { type: 'command_execution', command: 'echo hello-from-codex-mock', aggregated_output: 'hello-from-codex-mock', exit_code: 0 } });
   await sleep(300);
-  out({ type: 'item.completed', item: { type: 'agent_message', text: `(mock codex) 요청 "${prompt}" 처리 완료. thread=${threadId.slice(0, 8)}` } });
+  out({ type: 'item.completed', item: { type: 'agent_message', text: `(mock codex/${model}) 요청 "${prompt}" 처리 완료. thread=${threadId.slice(0, 8)}` } });
   out({ type: 'turn.completed', usage: { input_tokens: 120, output_tokens: 34 } });
 });

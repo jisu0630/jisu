@@ -69,6 +69,7 @@ npm run demo:agent                                       # 터미널 2
 | `includePartialMessages` | `true` 면 토큰 단위 실시간 스트리밍 (트래픽 증가) |
 | `claudeBin` | claude 실행 파일 (기본 `claude`, 경로 지정 가능) |
 | `engines.codex` | 설정하면 대시보드에서 Codex 세션도 시작 가능 (아래 참고) |
+| `models` | 새 세션 모달의 모델 드롭다운 목록. 기본값: claude `fable/opus/sonnet/haiku`, codex `gpt-5.1-codex/-mini/gpt-5.1`. 예: `"models": { "claude": ["opus"], "codex": ["gpt-5.1-codex"] }` |
 
 ## Codex 같이 쓰기
 

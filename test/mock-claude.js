@@ -8,10 +8,12 @@ import crypto from 'node:crypto';
 
 const resumeIdx = process.argv.indexOf('--resume');
 const sessionId = resumeIdx > -1 ? process.argv[resumeIdx + 1] : crypto.randomUUID();
+const modelIdx = process.argv.indexOf('--model');
+const model = modelIdx > -1 ? process.argv[modelIdx + 1] : 'mock-default-model';
 
 const out = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 
-out({ type: 'system', subtype: 'init', session_id: sessionId, model: 'mock-model', cwd: process.cwd() });
+out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd() });
 
 const rl = readline.createInterface({ input: process.stdin });
 rl.on('line', async (line) => {

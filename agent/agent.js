@@ -45,6 +45,13 @@ const CODEX = cfg.engines && cfg.engines.codex ? {
 } : null;
 const ENGINES = CODEX ? ['claude', 'codex'] : ['claude'];
 
+// 대시보드 모델 드롭다운에 보여줄 목록. 설정의 models 로 덮어쓸 수 있다.
+// 예: "models": { "claude": ["opus", "sonnet"], "codex": ["gpt-5.1-codex"] }
+const MODELS = {
+  claude: cfg.models?.claude || ['fable', 'opus', 'sonnet', 'haiku'],
+  codex: cfg.models?.codex || ['gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5.1'],
+};
+
 if (!HUB || !TOKEN) {
   console.error('설정에 hub 와 token 이 필요합니다.');
   process.exit(1);
@@ -73,12 +80,14 @@ function reportState() {
       type: 'state',
       platform: `${os.platform()} ${os.release()}`,
       engines: ENGINES,
+      models: MODELS,
       projects: PROJECTS.map((p) => ({ name: p.name, path: p.path })),
       sessions: [...sessions.values()].map((s) => ({
         key: s.key,
         sessionId: s.sessionId,
         project: s.project.name,
         engine: s.engine,
+        model: s.model,
         status: s.status,
         title: s.title,
         updatedAt: s.updatedAt,
@@ -91,7 +100,7 @@ function emitEvent(sessionKey, event) {
   sendToHub({ type: 'event', sessionKey, event });
 }
 
-function buildArgs(resumeId) {
+function buildArgs(session, resumeId) {
   const args = [
     '--print',
     '--input-format', 'stream-json',
@@ -100,7 +109,8 @@ function buildArgs(resumeId) {
     '--permission-mode', PERMISSION_MODE,
   ];
   if (INCLUDE_PARTIAL) args.push('--include-partial-messages');
-  if (MODEL) args.push('--model', MODEL);
+  const model = session.model || MODEL;
+  if (model) args.push('--model', model);
   if (resumeId) args.push('--resume', resumeId);
   return args;
 }
@@ -114,7 +124,7 @@ function writeUserMessage(session, text) {
 }
 
 function spawnClaude(session, resumeId) {
-  const proc = spawn(CLAUDE_BIN, buildArgs(resumeId), {
+  const proc = spawn(CLAUDE_BIN, buildArgs(session, resumeId), {
     cwd: session.project.path,
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: process.platform === 'win32', // Windows 에서는 claude 가 .cmd 심이라 shell 필요
@@ -219,7 +229,9 @@ function runCodexTurn(session, text) {
   const resuming = Boolean(session.sessionId);
   const args = ['exec'];
   if (resuming) args.push('resume', session.sessionId);
-  args.push('--json', ...CODEX.extraArgs, '-');
+  args.push('--json', ...CODEX.extraArgs);
+  if (session.model) args.push('-m', session.model);
+  args.push('-');
   const proc = spawn(CODEX.bin, args, {
     cwd: session.project.path,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -265,7 +277,7 @@ function runCodexTurn(session, text) {
   reportState();
 }
 
-function startSession({ project: projectName, prompt, engine }) {
+function startSession({ project: projectName, prompt, engine, model }) {
   const project = PROJECTS.find((p) => p.name === projectName);
   if (!project) return;
   const eng = engine === 'codex' ? 'codex' : 'claude';
@@ -275,6 +287,7 @@ function startSession({ project: projectName, prompt, engine }) {
     key,
     project,
     engine: eng,
+    model: typeof model === 'string' && model.trim() ? model.trim().slice(0, 64) : null,
     proc: null,
     sessionId: null,
     status: 'starting',
