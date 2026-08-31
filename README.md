@@ -96,8 +96,19 @@ npm run demo:agent                                       # 터미널 2
 - `FLEET_TOKEN` 은 충분히 길게(`openssl rand -hex 24`), 저장소에 커밋하지 마세요. (`fleet-agent.config.json` 은 `.gitignore` 처리되어 있습니다.)
 - `permissionMode` 주의: 헤드리스(`--print`) 모드에서는 권한 프롬프트에 답할 수 없어, 기본값 `acceptEdits` 에서는 파일 편집은 자동 허용되지만 임의 Bash 명령 등은 거부될 수 있습니다. `bypassPermissions` 로 바꾸면 모든 것이 허용되므로, 신뢰하는 네트워크 + 신뢰하는 사용자만 접근 가능한 환경에서만 쓰세요.
 
-## 한계와 다음 단계
+## 통합 메모리 (fleet-memory)
 
-- 이벤트 버퍼는 허브 메모리에만 있어 허브를 재시작하면 히스토리가 사라집니다. (세션 자체는 각 PC에 남아 있어 `--resume` 으로 이어집니다.) 필요해지면 SQLite 저장으로 확장.
+허브가 도는 메인 PC 에는 **모든 PC 의 세션 대화가 자동으로 영구 기록**됩니다 (`fleet-memory/`, git 제외):
+
+- `INDEX.md` — 전체 세션 색인 (최신순)
+- `transcripts/<PC>/<프로젝트>/<세션>.md` — 읽기 좋은 대화록 (사용자 요청·어시스턴트 답변)
+- `log/*.jsonl` — 원본 이벤트. 허브를 재시작해도 대시보드 히스토리가 여기서 복원됩니다
+- `CLAUDE.md` — 이 폴더의 용도를 Claude 에게 설명하는 안내문이 자동 생성됩니다
+
+메인 PC 의 Claude 세션이 다른 PC 들의 작업 내용을 알게 하려면, 메인 PC 에이전트 설정의 projects 에 fleet-memory 를 추가하거나(`{ "name": "fleet-memory", "path": ".../fleet-memory" }`), 로컬 세션에서 `claude --add-dir .../fleet-memory` 로 열면 됩니다. 그 상태에서 "office-pc 에서 어제 뭐 작업했지?" 같은 질문에 INDEX.md 와 대화록을 검색해 답할 수 있습니다.
+
+끄기: `FLEET_MEMORY=off`, 위치 변경: `FLEET_MEMORY_DIR=/원하는/경로`.
+
+## 한계와 다음 단계
 - 대시보드에서 권한 프롬프트에 개별 응답하는 기능은 없습니다. 필요하면 Agent SDK의 `canUseTool` 콜백 기반으로 확장 가능.
 - 참고: 직접 운영하는 게 부담스러우면 Claude Code 내장 기능인 `claude remote-control` + claude.ai/code 조합이 같은 문제를 관리형으로 풀어줍니다.

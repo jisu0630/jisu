@@ -97,7 +97,9 @@ function reportState() {
 }
 
 function emitEvent(sessionKey, event) {
-  sendToHub({ type: 'event', sessionKey, event });
+  const s = sessions.get(sessionKey);
+  // project/engine 은 허브의 통합 메모리(fleet-memory) 기록 경로에 쓰인다
+  sendToHub({ type: 'event', sessionKey, project: s?.project?.name, engine: s?.engine, event });
 }
 
 /* ---- 엔진 전환용 대화 기록 ----
