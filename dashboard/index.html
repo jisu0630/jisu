@@ -366,14 +366,25 @@ function renderSessHead() {
   pill.className = 'pill';
   pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
   pill.append(label);
-  const eng = document.createElement('span');
-  eng.className = 'eng ' + (s?.engine || 'claude');
-  eng.textContent = s?.engine === 'codex' ? 'CODEX' : 'CLAUDE';
   const t = document.createElement('span');
   t.textContent = `${selected.pc} / ${s ? s.project : ''} — ${s && s.sessionId ? s.sessionId.slice(0, 8) : selected.sessionKey}`;
 
-  // 진행 중에도 모델 변경 가능: Claude 는 --resume 재시작, Codex 는 다음 턴부터 적용
   const pcInfo = fleet.find((p) => p.name === selected.pc);
+
+  // 진행 중 엔진 전환: 이전 대화는 에이전트가 자동으로 인수인계
+  const engSel = document.createElement('select');
+  engSel.title = '엔진 변경 — 이전 대화가 자동으로 인수인계됩니다';
+  for (const [val, label] of [['claude', 'Claude'], ['codex', 'Codex']]) {
+    const o = document.createElement('option');
+    o.value = val;
+    o.textContent = label;
+    if (val === 'codex' && !(pcInfo?.engines || []).includes('codex')) o.disabled = true;
+    engSel.appendChild(o);
+  }
+  engSel.value = s?.engine || 'claude';
+  engSel.onchange = () => send({ type: 'set_engine', pc: selected.pc, sessionKey: selected.sessionKey, engine: engSel.value });
+
+  // 진행 중에도 모델 변경 가능: Claude 는 --resume 재시작, Codex 는 다음 턴부터 적용
   const modelSel = document.createElement('select');
   modelSel.title = '모델 변경 (다음 턴부터 적용)';
   const engineName = s?.engine || 'claude';
@@ -396,7 +407,7 @@ function renderSessHead() {
   stop.className = 'stop';
   stop.textContent = '세션 중지';
   stop.onclick = () => send({ type: 'stop_session', pc: selected.pc, sessionKey: selected.sessionKey });
-  head.append(pill, eng, t, modelSel, stop);
+  head.append(pill, engSel, t, modelSel, stop);
 }
 
 /* ---------- 트랜스크립트 렌더링 ---------- */

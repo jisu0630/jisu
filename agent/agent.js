@@ -100,6 +100,31 @@ function emitEvent(sessionKey, event) {
   sendToHub({ type: 'event', sessionKey, event });
 }
 
+/* ---- 엔진 전환용 대화 기록 ----
+ * Claude 와 Codex 는 대화 저장소가 분리되어 있어 상대 대화를 직접 이어받을 수 없다.
+ * 세션마다 사용자/어시스턴트 텍스트를 가볍게 기록해 두고, 엔진을 바꾸면
+ * 그 사이의 기록을 새 엔진의 첫 프롬프트에 인수인계 블록으로 붙인다. */
+function pushTranscript(session, role, text) {
+  if (!text) return;
+  session.transcript.push({ role, engine: session.engine, text: String(text).slice(0, 1000) });
+  if (session.transcript.length > 200) session.transcript.splice(0, session.transcript.length - 200);
+}
+
+function applyHandoff(session, text) {
+  if (session.handoffFrom == null) return text;
+  const entries = session.transcript.slice(session.handoffFrom);
+  session.handoffFrom = null;
+  if (!entries.length) return text;
+  let block = '';
+  for (const e of entries) {
+    const line = `${e.role === 'user' ? '사용자' : `어시스턴트(${e.engine})`}: ${e.text}\n`;
+    if (block.length + line.length > 8000) break;
+    block += line;
+  }
+  emitEvent(session.key, { type: 'agent', text: `이전 대화 ${entries.length}개 항목을 새 엔진에 인수인계했습니다` });
+  return `[이전 대화 인수인계] 이 작업은 다른 코딩 에이전트와 진행하다 이어받는 것이다. 아래는 그 대화 기록이다:\n${block}[인수인계 끝] 위 맥락을 이어서 아래 요청을 수행하라.\n\n${text}`;
+}
+
 function buildArgs(session, resumeId) {
   const args = [
     '--print',
@@ -116,9 +141,11 @@ function buildArgs(session, resumeId) {
 }
 
 function writeUserMessage(session, text) {
+  const finalText = applyHandoff(session, text);
+  pushTranscript(session, 'user', text);
   const line = JSON.stringify({
     type: 'user',
-    message: { role: 'user', content: [{ type: 'text', text }] },
+    message: { role: 'user', content: [{ type: 'text', text: finalText }] },
   });
   session.proc.stdin.write(line + '\n');
 }
@@ -147,7 +174,12 @@ function spawnClaude(session, resumeId) {
     } else if (event.type === 'result') {
       session.status = 'idle';
       session.pendingTurn = false;
-      if (session.pendingModelRestart) {
+      if (session.pendingEngine) {
+        const eng = session.pendingEngine;
+        session.pendingEngine = null;
+        session.pendingModelRestart = false;
+        applyEngineSwitch(session, eng);
+      } else if (session.pendingModelRestart) {
         session.pendingModelRestart = false;
         session.restarting = true;
         proc.kill();
@@ -155,6 +187,9 @@ function spawnClaude(session, resumeId) {
       }
     } else if (event.type === 'assistant') {
       session.status = 'running';
+      for (const block of event.message?.content || []) {
+        if (block.type === 'text') pushTranscript(session, 'assistant', block.text);
+      }
     }
     session.updatedAt = Date.now();
     emitEvent(session.key, event);
@@ -254,7 +289,9 @@ function runCodexTurn(session, text) {
   session.proc = proc;
   session.status = 'running';
   session.updatedAt = Date.now();
-  proc.stdin.write(text);
+  const finalText = applyHandoff(session, text);
+  pushTranscript(session, 'user', text);
+  proc.stdin.write(finalText);
   proc.stdin.end();
 
   const rl = readline.createInterface({ input: proc.stdout });
@@ -266,7 +303,14 @@ function runCodexTurn(session, text) {
       if (ev.thread_id) session.sessionId = ev.thread_id;
       if (resuming) return; // 이어지는 턴에서는 "세션 시작" 표시 생략
     }
-    for (const norm of normalizeCodexEvent(ev)) emitEvent(session.key, norm);
+    for (const norm of normalizeCodexEvent(ev)) {
+      if (norm.type === 'assistant') {
+        for (const block of norm.message?.content || []) {
+          if (block.type === 'text') pushTranscript(session, 'assistant', block.text);
+        }
+      }
+      emitEvent(session.key, norm);
+    }
     session.updatedAt = Date.now();
   });
   const rlErr = readline.createInterface({ input: proc.stderr });
@@ -281,8 +325,12 @@ function runCodexTurn(session, text) {
   proc.on('exit', (code) => {
     if (session.status !== 'stopped') session.status = code === 0 ? 'idle' : 'error';
     session.updatedAt = Date.now();
+    if (session.pendingEngine) {
+      applyEngineSwitch(session, session.pendingEngine);
+      session.pendingEngine = null;
+    }
     const next = session.queue.shift();
-    if (next && session.status === 'idle') {
+    if (next && session.status === 'idle' && session.engine === 'codex') {
       emitEvent(session.key, { type: 'user_input', text: next, ts: Date.now() });
       runCodexTurn(session, next);
     }
@@ -309,6 +357,9 @@ function startSession({ project: projectName, prompt, engine, model }) {
     updatedAt: Date.now(),
     pendingTurn: Boolean(prompt),
     queue: [],
+    transcript: [],
+    engineState: {},
+    handoffFrom: null,
   };
   sessions.set(key, session);
   log(`세션 시작: ${project.name} [${key}] (${eng})`);
@@ -361,6 +412,46 @@ function promptSession({ sessionKey, text }) {
   reportState();
 }
 
+function applyEngineSwitch(session, engine) {
+  // 현재 엔진의 네이티브 세션을 보관해 두고(다시 돌아오면 resume), 새 엔진으로 전환
+  session.engineState[session.engine] = { sessionId: session.sessionId, seen: session.transcript.length };
+  const alive = session.proc && session.proc.exitCode === null && !session.proc.killed;
+  if (alive) {
+    session.restarting = true;
+    session.proc.kill();
+  }
+  session.engine = engine;
+  const prev = session.engineState[engine] || {};
+  session.sessionId = prev.sessionId || null;
+  session.handoffFrom = prev.seen ?? 0;
+  session.model = null; // 엔진마다 모델 체계가 달라 기본 모델로 초기화
+  session.status = 'idle';
+  session.updatedAt = Date.now();
+  emitEvent(session.key, {
+    type: 'agent',
+    text: `엔진 변경: ${engine === 'codex' ? 'Codex' : 'Claude'} — 다음 프롬프트부터 적용되며, 이전 대화는 자동으로 인수인계됩니다`,
+  });
+}
+
+function setEngine({ sessionKey, engine }) {
+  const session = sessions.get(sessionKey);
+  if (!session) return;
+  const eng = engine === 'codex' ? 'codex' : 'claude';
+  if (eng === session.engine) return;
+  if (eng === 'codex' && !CODEX) {
+    emitEvent(sessionKey, { type: 'stderr', text: '이 PC 에는 engines.codex 설정이 없어 Codex 로 전환할 수 없습니다.' });
+    return;
+  }
+  const alive = session.proc && session.proc.exitCode === null && !session.proc.killed;
+  if (alive && session.status === 'running') {
+    session.pendingEngine = eng;
+    emitEvent(sessionKey, { type: 'agent', text: `엔진 변경 예약: ${eng === 'codex' ? 'Codex' : 'Claude'} — 진행 중인 턴이 끝나면 전환됩니다` });
+  } else {
+    applyEngineSwitch(session, eng);
+  }
+  reportState();
+}
+
 function setModel({ sessionKey, model }) {
   const session = sessions.get(sessionKey);
   if (!session) return;
@@ -410,6 +501,7 @@ function connect() {
       case 'start_session': startSession(msg); break;
       case 'prompt': promptSession(msg); break;
       case 'set_model': setModel(msg); break;
+      case 'set_engine': setEngine(msg); break;
       case 'stop_session': stopSession(msg); break;
       default: break;
     }
