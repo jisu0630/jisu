@@ -1,0 +1,10 @@
+{
+  "hub": "ws://localhost:8787",
+  "token": "demo-token-demo-token-demo",
+  "pcName": "demo-pc",
+  "permissionMode": "acceptEdits",
+  "claudeBin": "./mock-claude.js",
+  "projects": [
+    { "name": "demo-project", "path": "." }
+  ]
+}

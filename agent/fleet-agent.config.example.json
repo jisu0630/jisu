@@ -1,0 +1,13 @@
+{
+  "hub": "ws://YOUR-HUB-HOST:8787",
+  "token": "FLEET_TOKEN 과 동일한 값",
+  "pcName": "home-desktop",
+  "permissionMode": "acceptEdits",
+  "model": null,
+  "includePartialMessages": false,
+  "claudeBin": "claude",
+  "projects": [
+    { "name": "my-app", "path": "/home/me/work/my-app" },
+    { "name": "another-project", "path": "/home/me/work/another" }
+  ]
+}
