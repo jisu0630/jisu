@@ -8,6 +8,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "setup": "node setup.js",
     "server": "node server/server.js",
     "agent": "node agent/agent.js",
     "demo:agent": "node agent/agent.js test/demo.config.json"

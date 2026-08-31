@@ -16,24 +16,17 @@
 
 요구사항: Node.js 18+, 각 PC에 Claude Code CLI 설치 및 로그인.
 
-### 1. 허브 (항상 켜둘 머신 1대)
+**모든 머신에서 같은 한 줄** 을 실행하고, 설치 도우미의 질문에 답하면 됩니다:
 
 ```bash
-git clone <이 저장소>
-cd jisu && npm install
-FLEET_TOKEN=$(openssl rand -hex 24) npm run server   # 토큰은 기록해 두세요
-# → http://localhost:8787
+git clone https://github.com/jisu0630/jisu.git claude-fleet
+cd claude-fleet && npm install && npm run setup
 ```
 
-### 2. 에이전트 (각 PC마다)
+- **허브가 될 머신** (항상 켜둘 1대): 도우미에서 `1` 선택 → 토큰이 자동 생성됩니다 → `npm run server`
+- **각 PC**: 도우미에서 `2` 선택 → 허브 IP·토큰 입력(연결/토큰 검증 자동) → 프로젝트 경로 등록 → `npm run agent`
 
-```bash
-git clone <이 저장소>
-cd jisu && npm install
-cp agent/fleet-agent.config.example.json fleet-agent.config.json
-# fleet-agent.config.json 수정: hub 주소, token(허브와 동일), pcName, projects 목록
-npm run agent
-```
+수동으로 설정하려면 `agent/fleet-agent.config.example.json` 을 복사해 `fleet-agent.config.json` 을 만들고, 허브는 `FLEET_TOKEN=... npm run server` 로 실행해도 됩니다.
 
 터미널을 닫아도 유지하려면 pm2 / systemd / tmux 등으로 상주시키세요:
 
