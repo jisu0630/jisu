@@ -42,45 +42,30 @@
   .dot.run { background: var(--run); animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
 
-  main { flex: 1; display: flex; min-height: 0; }
+  main { flex: 1; display: flex; min-height: 0; position: relative; }
 
-  /* ---- 사이드바 ---- */
-  #sidebar {
-    width: 300px; flex: none; display: flex; flex-direction: column; min-height: 0;
-    border-right: 1px solid var(--border); background: var(--surface);
-  }
-  body.sidebar-hidden #sidebar { display: none; }
-  #sidebar-top { flex: none; padding: 10px 10px 6px; }
+  /* ---- 가운데 보드 (PC/프로젝트/세션 목록 — 항상 펼쳐짐) ---- */
+  #board { flex: 1; min-width: 0; overflow-y: auto; padding: 18px 20px; }
+  #board .wrap { max-width: 1200px; margin: 0 auto; }
+  #board-top { display: flex; gap: 10px; margin-bottom: 14px; }
   #search {
-    width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--border);
-    border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 12.5px; outline: none;
+    flex: 1; max-width: 420px; background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 14px; font: inherit; font-size: 13px; outline: none;
   }
   #search:focus { border-color: var(--accent); }
-  #pc-list { flex: 1; overflow-y: auto; padding: 4px 10px 10px; }
-  #menu-btn {
-    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
-    border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 14px; line-height: 1;
-  }
-  #menu-btn:hover { border-color: var(--accent); }
-  .pc { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: var(--bg); overflow: hidden; }
-  .pc-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
-  .pc-head:hover { background: var(--surface-2); }
-  .pc-head .name { font-weight: 700; }
-  .pc-head .meta { margin-left: auto; font-size: 11px; color: var(--ink-3); text-align: right; }
-  .chev { flex: none; color: var(--ink-3); font-size: 10px; width: 12px; transition: transform .15s; }
-  .chev.open { transform: rotate(90deg); }
-  .group {
-    display: flex; align-items: center; gap: 6px; padding: 6px 8px 2px; cursor: pointer; user-select: none;
-    font-size: 11px; color: var(--ink-3); letter-spacing: .3px;
-  }
-  .group:hover { color: var(--ink-2); }
-  .group .cnt { color: var(--ink-3); }
-  .pc-body { padding: 0 8px 8px; }
-  .proj { display: flex; align-items: center; gap: 6px; padding: 5px 6px; font-size: 12.5px; color: var(--ink-2); }
+  #pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: start; }
+  .pc { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+  .pc-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .pc-head .name { font-weight: 700; font-size: 14.5px; }
+  .pc-head .meta { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+  .pc-body { padding: 6px 8px 10px; }
+  .group { padding: 8px 8px 3px; font-size: 11px; color: var(--ink-3); letter-spacing: .3px; }
+  .proj { display: flex; align-items: center; gap: 6px; padding: 5px 8px; font-size: 12.5px; color: var(--ink-2); border-radius: 8px; }
+  .proj:hover { background: var(--surface-2); }
   .proj > span:first-child { white-space: nowrap; }
   .proj .path { flex: 1; min-width: 0; color: var(--ink-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .proj button {
-    margin-left: auto; flex: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    flex: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
     border-radius: 6px; font-size: 11.5px; padding: 2px 8px; cursor: pointer;
   }
   .proj button:hover { border-color: var(--accent); }
@@ -96,24 +81,36 @@
     font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
     border: 1px solid var(--border); color: var(--ink-2); background: var(--bg);
   }
-  .empty { color: var(--ink-3); font-size: 12.5px; padding: 8px; }
   .eng { flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .4px; padding: 1px 6px; border-radius: 4px; }
   .eng.claude { background: #37304d; color: #c4b5fd; }
   .eng.codex { background: #16382f; color: #5eead4; }
+  .empty { color: var(--ink-3); font-size: 13px; padding: 24px; text-align: center; }
 
-  /* ---- 본문 ---- */
-  #content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  #sess-head {
-    flex: none; display: flex; align-items: center; gap: 10px;
-    padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 12.5px; color: var(--ink-2);
+  /* ---- 대화 패널 (세션 클릭 시 오른쪽에서 열림, ✕ 로 닫힘) ---- */
+  #panel {
+    width: min(640px, 100%); flex: none; display: none; flex-direction: column; min-height: 0;
+    border-left: 1px solid var(--border); background: var(--surface);
   }
-  #sess-head .stop { margin-left: auto; border: 1px solid var(--border); background: var(--surface-2); color: var(--bad);
-    border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+  body.panel-open #panel { display: flex; }
+  @media (max-width: 1100px) {
+    #panel { position: absolute; inset: 0 0 0 auto; width: 100%; z-index: 5; box-shadow: -8px 0 24px rgba(0,0,0,.5); }
+  }
+  #sess-head {
+    flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); font-size: 12.5px; color: var(--ink-2);
+  }
   #sess-head select {
     background: var(--bg); color: var(--ink); border: 1px solid var(--border); border-radius: 6px;
-    font-size: 12px; padding: 2px 6px; max-width: 180px;
+    font-size: 12px; padding: 2px 6px; max-width: 150px;
   }
-  #transcript { flex: 1; overflow-y: auto; padding: 16px; }
+  #sess-head .stop { margin-left: auto; border: 1px solid var(--border); background: var(--bg); color: var(--bad);
+    border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+  #sess-head .close {
+    border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+    border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 13px; line-height: 1.2;
+  }
+  #sess-head .close:hover { border-color: var(--accent); }
+  #transcript { flex: 1; overflow-y: auto; padding: 16px; background: var(--bg); }
   #transcript .inner { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
 
   .msg { border-radius: 10px; padding: 10px 14px; white-space: pre-wrap; word-break: break-word; }
@@ -149,7 +146,6 @@
     border-radius: 10px; padding: 10px 18px; cursor: pointer; font-size: 13.5px;
   }
   #send-btn:disabled { opacity: .4; cursor: default; }
-  .placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
 
   /* ---- 모달 ---- */
   dialog {
@@ -170,26 +166,26 @@
 </head>
 <body>
 <header>
-  <button id="menu-btn" title="PC 목록 보이기/숨기기">☰</button>
   <h1>Claude Fleet</h1>
   <div class="conn"><span class="dot" id="conn-dot"></span><span id="conn-text">연결 중…</span></div>
 </header>
 <main>
-  <nav id="sidebar">
-    <div id="sidebar-top"><input id="search" type="search" placeholder="PC · 프로젝트 · 세션 검색"></div>
-    <div id="pc-list"><div class="empty">허브에 연결하면 PC 목록이 표시됩니다.</div></div>
-  </nav>
-  <section id="content">
-    <div class="placeholder" id="placeholder">왼쪽에서 세션을 선택하거나, 프로젝트의 [새 세션]을 눌러 시작하세요.</div>
-    <div id="sess-head" hidden></div>
-    <div id="transcript" hidden><div class="inner" id="transcript-inner"></div></div>
-    <div id="composer" hidden>
+  <div id="board">
+    <div class="wrap">
+      <div id="board-top"><input id="search" type="search" placeholder="PC · 프로젝트 · 세션 검색"></div>
+      <div id="pc-grid"><div class="empty">허브에 연결하면 PC 목록이 표시됩니다.</div></div>
+    </div>
+  </div>
+  <aside id="panel">
+    <div id="sess-head"></div>
+    <div id="transcript"><div class="inner" id="transcript-inner"></div></div>
+    <div id="composer">
       <div class="inner">
         <textarea id="prompt-input" placeholder="프롬프트 입력 — Enter 전송 · Shift+Enter 줄바꿈"></textarea>
         <button id="send-btn">전송</button>
       </div>
     </div>
-  </section>
+  </aside>
 </main>
 
 <dialog id="token-dialog">
@@ -227,19 +223,19 @@ const STATUS_LABEL = {
   starting: ['시작 중', 'run'], running: ['실행 중', 'run'], idle: ['대기', 'on'],
   stopped: ['중지됨', 'off'], exited: ['종료됨', ''], error: ['오류', 'off'],
 };
+const FALLBACK_MODELS = { claude: ['fable', 'opus', 'sonnet', 'haiku'], codex: [] };
 
 let ws = null;
 let token = null;
-let fleet = [];                       // 허브가 보내주는 PC 스냅샷
+let fleet = [];
 let selected = null;                  // {pc, sessionKey}
-let liveBubbles = new Map();          // sessionKey -> element (partial streaming)
-let newTarget = null;                 // {pc, project}
+let liveBubbles = new Map();
+let newTarget = null;
+let searchQuery = '';
 
 try { token = localStorage.getItem('fleet_token'); } catch {}
 
-function askToken() {
-  $('token-dialog').showModal();
-}
+function askToken() { $('token-dialog').showModal(); }
 $('token-save').addEventListener('click', () => {
   token = $('token-input').value.trim();
   if (!token) return;
@@ -273,7 +269,7 @@ function connect() {
   };
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
-    if (msg.type === 'fleet') { fleet = msg.pcs; renderSidebar(); renderSessHead(); }
+    if (msg.type === 'fleet') { fleet = msg.pcs; renderBoard(); renderSessHead(); }
     else if (msg.type === 'history') {
       if (selected && msg.pc === selected.pc && msg.sessionKey === selected.sessionKey) {
         $('transcript-inner').innerHTML = '';
@@ -299,48 +295,25 @@ function subscribe(pc, sessionKey) {
   send({ type: 'subscribe', pc, sessionKey });
 }
 
-/* ---------- 사이드바 ---------- */
-// 접기/펼치기 상태는 브라우저에 저장 (PC 카드, 프로젝트/세션 그룹, 사이드바 표시)
-const uiState = (() => {
-  try { return JSON.parse(localStorage.getItem('fleet_ui') || '{}'); } catch { return {}; }
-})();
-uiState.collapsedPcs = uiState.collapsedPcs || {};
-uiState.openProjects = uiState.openProjects || {};
-uiState.openSessions = uiState.openSessions || {};
-function saveUi() { try { localStorage.setItem('fleet_ui', JSON.stringify(uiState)); } catch {} }
-
-if (uiState.sidebarHidden) document.body.classList.add('sidebar-hidden');
-$('menu-btn').addEventListener('click', () => {
-  uiState.sidebarHidden = document.body.classList.toggle('sidebar-hidden');
-  saveUi();
-});
-
-let searchQuery = '';
+/* ---------- 가운데 보드 (항상 펼쳐진 목록) ---------- */
 $('search').addEventListener('input', (e) => {
   searchQuery = e.target.value.trim().toLowerCase();
-  renderSidebar();
+  renderBoard();
 });
 
-function makeGroup(label, count, open, onToggle) {
-  const g = document.createElement('div');
-  g.className = 'group';
-  const chev = document.createElement('span');
-  chev.className = 'chev' + (open ? ' open' : '');
-  chev.textContent = '▶';
-  g.append(chev, `${label} `);
-  const cnt = document.createElement('span');
-  cnt.className = 'cnt';
-  cnt.textContent = `(${count})`;
-  g.appendChild(cnt);
-  g.onclick = onToggle;
-  return g;
+function timeAgo(ts) {
+  if (!ts) return '';
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return '방금';
+  if (m < 60) return `${m}분 전`;
+  return `${Math.round(m / 60)}시간 전`;
 }
 
-function renderSidebar() {
-  const nav = $('pc-list');
-  nav.innerHTML = '';
+function renderBoard() {
+  const grid = $('pc-grid');
+  grid.innerHTML = '';
   if (!fleet.length) {
-    nav.innerHTML = '<div class="empty">접속한 PC 가 없습니다. 각 PC 에서 에이전트를 실행하세요:<br><code>npm run agent</code></div>';
+    grid.innerHTML = '<div class="empty">접속한 PC 가 없습니다. 각 PC 에서 에이전트를 실행하세요: <code>npm run agent</code></div>';
     return;
   }
   const q = searchQuery;
@@ -356,15 +329,11 @@ function renderSidebar() {
     }
     shown++;
     const running = sessList.filter((s) => s.status === 'running' || s.status === 'starting').length;
-    const collapsed = q ? false : Boolean(uiState.collapsedPcs[pc.name]);
 
     const el = document.createElement('div');
     el.className = 'pc';
     const head = document.createElement('div');
     head.className = 'pc-head';
-    const chev = document.createElement('span');
-    chev.className = 'chev' + (collapsed ? '' : ' open');
-    chev.textContent = '▶';
     const dot = document.createElement('span');
     dot.className = `dot ${pc.online ? (running ? 'run' : 'on') : 'off'}`;
     const name = document.createElement('span');
@@ -373,90 +342,71 @@ function renderSidebar() {
     const meta = document.createElement('span');
     meta.className = 'meta';
     meta.textContent = pc.online
-      ? `세션 ${sessList.length}${running ? ` · 실행 ${running}` : ''}`
+      ? `온라인 · 세션 ${sessList.length}${running ? ` · 실행 ${running}` : ''}`
       : `오프라인 · ${timeAgo(pc.lastSeen)}`;
-    head.append(chev, dot, name, meta);
-    head.onclick = () => {
-      uiState.collapsedPcs[pc.name] = !uiState.collapsedPcs[pc.name];
-      saveUi();
-      renderSidebar();
-    };
+    head.append(dot, name, meta);
     el.appendChild(head);
 
-    if (!collapsed) {
-      const body = document.createElement('div');
-      body.className = 'pc-body';
+    const body = document.createElement('div');
+    body.className = 'pc-body';
 
-      const projOpen = q ? true : (uiState.openProjects[pc.name] ?? projects.length <= 4);
-      body.appendChild(makeGroup('프로젝트', projects.length, projOpen, () => {
-        uiState.openProjects[pc.name] = !projOpen;
-        saveUi();
-        renderSidebar();
-      }));
-      if (projOpen) {
-        for (const proj of projects) {
-          const row = document.createElement('div');
-          row.className = 'proj';
-          const nm = document.createElement('span'); nm.textContent = '📁 ' + proj.name;
-          const pt = document.createElement('span'); pt.className = 'path'; pt.textContent = proj.path;
-          const btn = document.createElement('button'); btn.textContent = '새 세션';
-          btn.disabled = !pc.online;
-          btn.onclick = () => openNewDialog(pc.name, proj.name);
-          row.append(nm, pt, btn);
-          body.appendChild(row);
-        }
-      }
-
-      const sessOpen = q ? true : (uiState.openSessions[pc.name] ?? true);
-      body.appendChild(makeGroup('세션', sessList.length, sessOpen, () => {
-        uiState.openSessions[pc.name] = !sessOpen;
-        saveUi();
-        renderSidebar();
-      }));
-      if (sessOpen) {
-        for (const s of sessList) {
-          const [label, dotCls] = STATUS_LABEL[s.status] || [s.status, ''];
-          const row = document.createElement('div');
-          row.className = 'sess' + (selected && selected.pc === pc.name && selected.sessionKey === s.key ? ' active' : '');
-          const pill = document.createElement('span');
-          pill.className = 'pill';
-          pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
-          pill.append(label);
-          const eng = document.createElement('span');
-          eng.className = 'eng ' + (s.engine || 'claude');
-          eng.textContent = s.engine === 'codex' ? 'CODEX' : 'CLAUDE';
-          const title = document.createElement('span');
-          title.className = 'title';
-          title.textContent = `${s.project} · ${s.title || s.key}`;
-          row.append(pill, eng, title);
-          row.onclick = () => selectSession(pc.name, s.key);
-          body.appendChild(row);
-        }
-      }
-      el.appendChild(body);
+    const gp = document.createElement('div');
+    gp.className = 'group';
+    gp.textContent = `프로젝트 (${projects.length})`;
+    body.appendChild(gp);
+    for (const proj of projects) {
+      const row = document.createElement('div');
+      row.className = 'proj';
+      const nm = document.createElement('span'); nm.textContent = '📁 ' + proj.name;
+      const pt = document.createElement('span'); pt.className = 'path'; pt.textContent = proj.path;
+      const btn = document.createElement('button'); btn.textContent = '새 세션';
+      btn.disabled = !pc.online;
+      btn.onclick = () => openNewDialog(pc.name, proj.name);
+      row.append(nm, pt, btn);
+      body.appendChild(row);
     }
-    nav.appendChild(el);
+
+    const gs = document.createElement('div');
+    gs.className = 'group';
+    gs.textContent = `세션 (${sessList.length})`;
+    body.appendChild(gs);
+    for (const s of sessList) {
+      const [label, dotCls] = STATUS_LABEL[s.status] || [s.status, ''];
+      const row = document.createElement('div');
+      row.className = 'sess' + (selected && selected.pc === pc.name && selected.sessionKey === s.key ? ' active' : '');
+      const pill = document.createElement('span');
+      pill.className = 'pill';
+      pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
+      pill.append(label);
+      const eng = document.createElement('span');
+      eng.className = 'eng ' + (s.engine || 'claude');
+      eng.textContent = s.engine === 'codex' ? 'CODEX' : 'CLAUDE';
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = `${s.project} · ${s.title || s.key}`;
+      row.append(pill, eng, title);
+      row.onclick = () => selectSession(pc.name, s.key);
+      body.appendChild(row);
+    }
+    el.appendChild(body);
+    grid.appendChild(el);
   }
-  if (q && !shown) nav.innerHTML = '<div class="empty">검색 결과가 없습니다.</div>';
+  if (q && !shown) grid.innerHTML = '<div class="empty">검색 결과가 없습니다.</div>';
 }
 
-function timeAgo(ts) {
-  if (!ts) return '';
-  const m = Math.round((Date.now() - ts) / 60000);
-  if (m < 1) return '방금';
-  if (m < 60) return `${m}분 전`;
-  return `${Math.round(m / 60)}시간 전`;
+/* ---------- 대화 패널 열기/닫기 ---------- */
+function openPanel() { document.body.classList.add('panel-open'); }
+function closePanel() {
+  document.body.classList.remove('panel-open');
+  selected = null;
+  renderBoard();
 }
 
-/* ---------- 세션 선택 ---------- */
 function selectSession(pc, sessionKey) {
   selected = { pc, sessionKey };
-  $('placeholder').hidden = true;
-  $('sess-head').hidden = false;
-  $('transcript').hidden = false;
-  $('composer').hidden = false;
+  openPanel();
   $('transcript-inner').innerHTML = '<div class="meta">불러오는 중…</div>';
-  renderSidebar();
+  renderBoard();
   renderSessHead();
   subscribe(pc, sessionKey);
   $('prompt-input').focus();
@@ -478,6 +428,7 @@ function renderSessHead() {
   pill.className = 'pill';
   pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
   pill.append(label);
+
   const t = document.createElement('span');
   t.textContent = `${selected.pc} / ${s ? s.project : ''} — ${s && s.sessionId ? s.sessionId.slice(0, 8) : selected.sessionKey}`;
 
@@ -486,17 +437,17 @@ function renderSessHead() {
   // 진행 중 엔진 전환: 이전 대화는 에이전트가 자동으로 인수인계
   const engSel = document.createElement('select');
   engSel.title = '엔진 변경 — 이전 대화가 자동으로 인수인계됩니다';
-  for (const [val, label] of [['claude', 'Claude'], ['codex', 'Codex']]) {
+  for (const [val, lbl] of [['claude', 'Claude'], ['codex', 'Codex']]) {
     const o = document.createElement('option');
     o.value = val;
-    o.textContent = label;
+    o.textContent = lbl;
     if (val === 'codex' && !(pcInfo?.engines || []).includes('codex')) o.disabled = true;
     engSel.appendChild(o);
   }
   engSel.value = s?.engine || 'claude';
   engSel.onchange = () => send({ type: 'set_engine', pc: selected.pc, sessionKey: selected.sessionKey, engine: engSel.value });
 
-  // 진행 중에도 모델 변경 가능: Claude 는 --resume 재시작, Codex 는 다음 턴부터 적용
+  // 진행 중 모델 변경: Claude 는 --resume 재시작, Codex 는 다음 턴부터 적용
   const modelSel = document.createElement('select');
   modelSel.title = '모델 변경 (다음 턴부터 적용)';
   const engineName = s?.engine || 'claude';
@@ -519,7 +470,14 @@ function renderSessHead() {
   stop.className = 'stop';
   stop.textContent = '세션 중지';
   stop.onclick = () => send({ type: 'stop_session', pc: selected.pc, sessionKey: selected.sessionKey });
-  head.append(pill, engSel, t, modelSel, stop);
+
+  const close = document.createElement('button');
+  close.className = 'close';
+  close.title = '패널 닫기';
+  close.textContent = '✕';
+  close.onclick = closePanel;
+
+  head.append(pill, engSel, t, modelSel, stop, close);
 }
 
 /* ---------- 트랜스크립트 렌더링 ---------- */
@@ -665,10 +623,11 @@ $('prompt-input').addEventListener('input', (e) => {
   e.target.style.height = '';
   e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
 });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('panel-open')) closePanel();
+});
 
 /* ---------- 새 세션 ---------- */
-const FALLBACK_MODELS = { claude: ['fable', 'opus', 'sonnet', 'haiku'], codex: [] };
-
 function fillModelSelect() {
   if (!newTarget) return;
   const pcInfo = fleet.find((p) => p.name === newTarget.pc);
