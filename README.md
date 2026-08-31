@@ -68,6 +68,20 @@ npm run demo:agent                                       # 터미널 2
 | `model` | 세션 모델 지정 (생략 시 기본 모델) |
 | `includePartialMessages` | `true` 면 토큰 단위 실시간 스트리밍 (트래픽 증가) |
 | `claudeBin` | claude 실행 파일 (기본 `claude`, 경로 지정 가능) |
+| `engines.codex` | 설정하면 대시보드에서 Codex 세션도 시작 가능 (아래 참고) |
+
+## Codex 같이 쓰기
+
+각 PC 에 [OpenAI Codex CLI](https://github.com/openai/codex)를 설치·로그인해 두고, 에이전트 설정에 한 줄만 추가하면 됩니다 (`npm run setup` 에서 y 로 답해도 됨):
+
+```json
+"engines": { "codex": { "bin": "codex", "extraArgs": ["--full-auto"] } }
+```
+
+그러면 대시보드의 [새 세션] 모달에 **Claude / Codex 선택**이 생기고, 같은 화면에서 두 엔진 세션을 나란히 띄워 번갈아 쓸 수 있습니다 (세션마다 CLAUDE / CODEX 뱃지 표시). 내부적으로 Codex 는 `codex exec --json` 으로 턴을 실행하고 `codex exec resume <thread_id>` 로 대화를 이어갑니다. 이전 턴이 끝나기 전에 보낸 프롬프트는 대기열에 쌓였다가 자동 전송됩니다.
+
+- `extraArgs` 기본값 `--full-auto` 는 승인 없이 작업공간 쓰기까지 허용하는 모드입니다. 더 조이거나(`--sandbox read-only`) 풀려면(`--dangerously-bypass-approvals-and-sandbox`) 여기서 바꾸세요.
+- Codex CLI 의 JSON 이벤트 형식은 버전에 따라 다를 수 있습니다. 알 수 없는 이벤트는 무시되도록 방어적으로 파싱하므로 동작은 하지만, 표시가 이상하면 `codex exec --json "test"` 출력을 확인해 주세요. Codex 사용량은 OpenAI 계정에서 과금됩니다.
 
 ## 반드시 읽을 것: 보안
 

@@ -74,6 +74,9 @@
     border: 1px solid var(--border); color: var(--ink-2); background: var(--bg);
   }
   .empty { color: var(--ink-3); font-size: 12.5px; padding: 8px; }
+  .eng { flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .4px; padding: 1px 6px; border-radius: 4px; }
+  .eng.claude { background: #37304d; color: #c4b5fd; }
+  .eng.codex { background: #16382f; color: #5eead4; }
 
   /* ---- 본문 ---- */
   #content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -168,6 +171,15 @@
 <dialog id="new-dialog">
   <h2>새 세션 시작</h2>
   <div id="new-target" style="font-size:12.5px;color:var(--ink-2)"></div>
+  <label>엔진</label>
+  <div style="display:flex;gap:16px;font-size:13px">
+    <label style="display:flex;align-items:center;gap:6px;margin:0">
+      <input type="radio" name="engine" value="claude" checked> Claude
+    </label>
+    <label id="codex-option" style="display:flex;align-items:center;gap:6px;margin:0">
+      <input type="radio" name="engine" value="codex" id="codex-radio"> Codex
+    </label>
+  </div>
   <label for="new-prompt">첫 프롬프트</label>
   <textarea id="new-prompt" rows="4" placeholder="예) 테스트 전부 돌리고 실패 원인 고쳐줘"></textarea>
   <div class="row">
@@ -295,10 +307,13 @@ function renderSidebar() {
       pill.className = 'pill';
       pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
       pill.append(label);
+      const eng = document.createElement('span');
+      eng.className = 'eng ' + (s.engine || 'claude');
+      eng.textContent = s.engine === 'codex' ? 'CODEX' : 'CLAUDE';
       const title = document.createElement('span');
       title.className = 'title';
       title.textContent = `${s.project} · ${s.title || s.key}`;
-      row.append(pill, title);
+      row.append(pill, eng, title);
       row.onclick = () => selectSession(pc.name, s.key);
       body.appendChild(row);
     }
@@ -345,13 +360,16 @@ function renderSessHead() {
   pill.className = 'pill';
   pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
   pill.append(label);
+  const eng = document.createElement('span');
+  eng.className = 'eng ' + (s?.engine || 'claude');
+  eng.textContent = s?.engine === 'codex' ? 'CODEX' : 'CLAUDE';
   const t = document.createElement('span');
   t.textContent = `${selected.pc} / ${s ? s.project : ''} — ${s && s.sessionId ? s.sessionId.slice(0, 8) : selected.sessionKey}`;
   const stop = document.createElement('button');
   stop.className = 'stop';
   stop.textContent = '세션 중지';
   stop.onclick = () => send({ type: 'stop_session', pc: selected.pc, sessionKey: selected.sessionKey });
-  head.append(pill, t, stop);
+  head.append(pill, eng, t, stop);
 }
 
 /* ---------- 트랜스크립트 렌더링 ---------- */
@@ -448,7 +466,9 @@ function renderEvent(sessionKey, ev) {
       dropLive(sessionKey);
       const secs = ev.duration_ms ? (ev.duration_ms / 1000).toFixed(1) + 's' : '';
       const cost = ev.total_cost_usd != null ? '$' + ev.total_cost_usd.toFixed(4) : '';
-      add(el('div', 'meta', `— 턴 완료 ${[secs, cost, ev.num_turns ? ev.num_turns + '턴' : ''].filter(Boolean).join(' · ')} —`));
+      const toks = ev.usage && (ev.usage.input_tokens || ev.usage.output_tokens)
+        ? `${ev.usage.input_tokens || 0}↑ ${ev.usage.output_tokens || 0}↓ 토큰` : '';
+      add(el('div', 'meta', `— 턴 완료 ${[secs, cost, toks, ev.num_turns > 1 ? ev.num_turns + '턴' : ''].filter(Boolean).join(' · ')} —`));
       break;
     }
     case 'stderr':
@@ -501,13 +521,20 @@ function openNewDialog(pc, project) {
   newTarget = { pc, project };
   $('new-target').textContent = `${pc} / ${project}`;
   $('new-prompt').value = '';
+  const pcInfo = fleet.find((p) => p.name === pc);
+  const hasCodex = (pcInfo?.engines || ['claude']).includes('codex');
+  $('codex-radio').disabled = !hasCodex;
+  $('codex-option').style.opacity = hasCodex ? '1' : '.35';
+  $('codex-option').title = hasCodex ? '' : '이 PC 의 에이전트 설정에 engines.codex 가 없습니다';
+  if (!hasCodex) document.querySelector('input[name=engine][value=claude]').checked = true;
   $('new-dialog').showModal();
   $('new-prompt').focus();
 }
 $('new-cancel').addEventListener('click', () => $('new-dialog').close());
 $('new-start').addEventListener('click', () => {
   if (!newTarget) return;
-  send({ type: 'start_session', pc: newTarget.pc, project: newTarget.project, prompt: $('new-prompt').value.trim() });
+  const engine = document.querySelector('input[name=engine]:checked')?.value || 'claude';
+  send({ type: 'start_session', pc: newTarget.pc, project: newTarget.project, engine, prompt: $('new-prompt').value.trim() });
   $('new-dialog').close();
 });
 

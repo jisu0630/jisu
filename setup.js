@@ -114,6 +114,8 @@ if (role === '2') {
   }
   if (!projects.length) console.log('⚠ 프로젝트를 하나도 등록하지 않았습니다. 나중에 fleet-agent.config.json 에 추가하세요.');
 
+  const useCodex = (await ask('\n이 PC 에서 OpenAI Codex CLI 도 쓸까요? (codex 설치·로그인 필요) (y/N)', 'N')).toLowerCase() === 'y';
+
   console.log('\n권한 모드 선택:');
   console.log('  1) acceptEdits       — 파일 편집 자동 허용, 그 외 도구는 제한 (기본, 안전)');
   console.log('  2) bypassPermissions — 모든 도구 자동 허용 (편하지만 위험 — 사설망에서만!)');
@@ -127,6 +129,7 @@ if (role === '2') {
     includePartialMessages: false,
     projects,
   };
+  if (useCodex) config.engines = { codex: { bin: 'codex', extraArgs: ['--full-auto'] } };
   const cfgPath = path.join(__dirname, 'fleet-agent.config.json');
   fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
 

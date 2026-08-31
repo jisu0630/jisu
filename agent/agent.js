@@ -25,17 +25,25 @@ const HUB = cfg.hub;                       // 예: ws://hub-host:8787
 const TOKEN = cfg.token;
 const PC_NAME = cfg.pcName || os.hostname();
 const PROJECTS = (cfg.projects || []).map((p) => ({ name: p.name, path: path.resolve(p.path) }));
-// claudeBin 에 경로가 들어오면(예: 목 테스트) 설정 파일 위치 기준으로 절대경로화
-const CLAUDE_BIN = (() => {
-  const bin = cfg.claudeBin || 'claude';
+// 실행 파일에 경로가 들어오면(예: 목 테스트) 설정 파일 위치 기준으로 절대경로화
+function resolveBin(bin) {
   if (bin.includes('/') || bin.includes('\\')) {
     return path.resolve(path.dirname(path.resolve(configPath)), bin);
   }
   return bin;
-})();
+}
+const CLAUDE_BIN = resolveBin(cfg.claudeBin || 'claude');
 const PERMISSION_MODE = cfg.permissionMode || 'acceptEdits';
 const MODEL = cfg.model || null;
 const INCLUDE_PARTIAL = Boolean(cfg.includePartialMessages);
+
+// Codex CLI 지원 (선택): 설정에 engines.codex 가 있으면 대시보드에서 Codex 세션도 시작 가능
+// 예: "engines": { "codex": { "bin": "codex", "extraArgs": ["--full-auto"] } }
+const CODEX = cfg.engines && cfg.engines.codex ? {
+  bin: resolveBin(cfg.engines.codex.bin || 'codex'),
+  extraArgs: Array.isArray(cfg.engines.codex.extraArgs) ? cfg.engines.codex.extraArgs : ['--full-auto'],
+} : null;
+const ENGINES = CODEX ? ['claude', 'codex'] : ['claude'];
 
 if (!HUB || !TOKEN) {
   console.error('설정에 hub 와 token 이 필요합니다.');
@@ -64,11 +72,13 @@ function reportState() {
     sendToHub({
       type: 'state',
       platform: `${os.platform()} ${os.release()}`,
+      engines: ENGINES,
       projects: PROJECTS.map((p) => ({ name: p.name, path: p.path })),
       sessions: [...sessions.values()].map((s) => ({
         key: s.key,
         sessionId: s.sessionId,
         project: s.project.name,
+        engine: s.engine,
         status: s.status,
         title: s.title,
         updatedAt: s.updatedAt,
@@ -157,27 +167,138 @@ function spawnClaude(session, resumeId) {
   });
 }
 
-function startSession({ project: projectName, prompt }) {
+/* ---------------- Codex 어댑터 ----------------
+ * codex exec --json 은 JSONL 이벤트(thread.started / item.* / turn.completed)를 내보낸다.
+ * 이를 대시보드가 아는 Claude 이벤트 형식으로 변환한다. 턴마다 프로세스를 새로 띄우고
+ * 이후 턴은 `codex exec resume <thread_id>` 로 이어간다. 프롬프트는 stdin('-')으로 전달. */
+
+function codexToolUse(name, hint) {
+  return { type: 'assistant', message: { role: 'assistant', content: [
+    { type: 'tool_use', id: 'codex', name, input: { command: String(hint || '').slice(0, 200) } },
+  ] } };
+}
+
+function normalizeCodexEvent(ev) {
+  const out = [];
+  const item = ev.item || {};
+  switch (ev.type) {
+    case 'thread.started':
+      out.push({ type: 'system', subtype: 'init', session_id: ev.thread_id, model: 'codex' });
+      break;
+    case 'turn.completed':
+      out.push({ type: 'result', subtype: 'success', num_turns: 1, usage: ev.usage || {} });
+      break;
+    case 'turn.failed':
+    case 'error':
+      out.push({ type: 'stderr', text: ev.error?.message || ev.message || JSON.stringify(ev).slice(0, 500) });
+      break;
+    case 'item.started':
+      if (item.type === 'command_execution') out.push(codexToolUse('Bash', item.command));
+      else if (item.type === 'mcp_tool_call') out.push(codexToolUse(item.tool || 'MCP', item.server));
+      break;
+    case 'item.completed':
+      if (item.type === 'agent_message' && item.text) {
+        out.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: item.text }] } });
+      } else if (item.type === 'command_execution') {
+        out.push({ type: 'user', message: { role: 'user', content: [{
+          type: 'tool_result', is_error: item.exit_code != null && item.exit_code !== 0,
+          content: String(item.aggregated_output || '').slice(0, 4000),
+        }] } });
+      } else if (item.type === 'file_change') {
+        const desc = (item.changes || []).map((c) => `${c.kind || ''} ${c.path || ''}`).join(', ');
+        out.push(codexToolUse('FileChange', desc));
+      }
+      break;
+    default:
+      break;
+  }
+  return out;
+}
+
+function runCodexTurn(session, text) {
+  const resuming = Boolean(session.sessionId);
+  const args = ['exec'];
+  if (resuming) args.push('resume', session.sessionId);
+  args.push('--json', ...CODEX.extraArgs, '-');
+  const proc = spawn(CODEX.bin, args, {
+    cwd: session.project.path,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
+  });
+  session.proc = proc;
+  session.status = 'running';
+  session.updatedAt = Date.now();
+  proc.stdin.write(text);
+  proc.stdin.end();
+
+  const rl = readline.createInterface({ input: proc.stdout });
+  rl.on('line', (line) => {
+    if (!line.trim()) return;
+    let ev;
+    try { ev = JSON.parse(line); } catch { return; } // codex 는 JSON 외 안내 문구도 출력할 수 있음
+    if (ev.type === 'thread.started') {
+      if (ev.thread_id) session.sessionId = ev.thread_id;
+      if (resuming) return; // 이어지는 턴에서는 "세션 시작" 표시 생략
+    }
+    for (const norm of normalizeCodexEvent(ev)) emitEvent(session.key, norm);
+    session.updatedAt = Date.now();
+  });
+  const rlErr = readline.createInterface({ input: proc.stderr });
+  rlErr.on('line', (line) => {
+    if (line.trim()) emitEvent(session.key, { type: 'stderr', text: line });
+  });
+  proc.on('error', (err) => {
+    session.status = 'error';
+    emitEvent(session.key, { type: 'stderr', text: `codex 실행 실패: ${err.message}` });
+    reportState();
+  });
+  proc.on('exit', (code) => {
+    if (session.status !== 'stopped') session.status = code === 0 ? 'idle' : 'error';
+    session.updatedAt = Date.now();
+    const next = session.queue.shift();
+    if (next && session.status === 'idle') {
+      emitEvent(session.key, { type: 'user_input', text: next, ts: Date.now() });
+      runCodexTurn(session, next);
+    }
+    reportState();
+  });
+  reportState();
+}
+
+function startSession({ project: projectName, prompt, engine }) {
   const project = PROJECTS.find((p) => p.name === projectName);
   if (!project) return;
+  const eng = engine === 'codex' ? 'codex' : 'claude';
+  if (eng === 'codex' && !CODEX) return;
   const key = crypto.randomBytes(4).toString('hex');
   const session = {
     key,
     project,
+    engine: eng,
     proc: null,
     sessionId: null,
     status: 'starting',
     title: (prompt || '').slice(0, 60) || '(새 세션)',
     updatedAt: Date.now(),
     pendingTurn: Boolean(prompt),
+    queue: [],
   };
   sessions.set(key, session);
-  log(`세션 시작: ${project.name} [${key}]`);
-  spawnClaude(session);
-  if (prompt) {
-    emitEvent(key, { type: 'user_input', text: prompt, ts: Date.now() });
-    writeUserMessage(session, prompt);
-    session.status = 'running';
+  log(`세션 시작: ${project.name} [${key}] (${eng})`);
+  if (eng === 'codex') {
+    if (prompt) {
+      emitEvent(key, { type: 'user_input', text: prompt, ts: Date.now() });
+      runCodexTurn(session, prompt);
+    } else {
+      session.status = 'idle';
+    }
+  } else {
+    spawnClaude(session);
+    if (prompt) {
+      emitEvent(key, { type: 'user_input', text: prompt, ts: Date.now() });
+      writeUserMessage(session, prompt);
+      session.status = 'running';
+    }
   }
   reportState();
 }
@@ -185,6 +306,17 @@ function startSession({ project: projectName, prompt }) {
 function promptSession({ sessionKey, text }) {
   const session = sessions.get(sessionKey);
   if (!session || !text) return;
+  if (session.engine === 'codex') {
+    const busy = session.proc && session.proc.exitCode === null && !session.proc.killed;
+    if (busy) {
+      session.queue.push(text); // 진행 중인 턴이 끝나면 자동 전송
+      emitEvent(sessionKey, { type: 'agent', text: '이전 턴이 끝나면 전송됩니다 (대기열)' });
+    } else {
+      emitEvent(sessionKey, { type: 'user_input', text, ts: Date.now() });
+      runCodexTurn(session, text);
+    }
+    return;
+  }
   emitEvent(sessionKey, { type: 'user_input', text, ts: Date.now() });
   const alive = session.proc && session.proc.exitCode === null && !session.proc.killed;
   if (!alive) {

@@ -4,6 +4,9 @@
   "pcName": "demo-pc",
   "permissionMode": "acceptEdits",
   "claudeBin": "./mock-claude.js",
+  "engines": {
+    "codex": { "bin": "./mock-codex.js", "extraArgs": [] }
+  },
   "projects": [
     { "name": "demo-project", "path": "." }
   ]
