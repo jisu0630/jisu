@@ -88,6 +88,17 @@ npm run demo:agent                                       # 터미널 2
 - `extraArgs` 기본값 `--full-auto` 는 승인 없이 작업공간 쓰기까지 허용하는 모드입니다. 더 조이거나(`--sandbox read-only`) 풀려면(`--dangerously-bypass-approvals-and-sandbox`) 여기서 바꾸세요.
 - Codex CLI 의 JSON 이벤트 형식은 버전에 따라 다를 수 있습니다. 알 수 없는 이벤트는 무시되도록 방어적으로 파싱하므로 동작은 하지만, 표시가 이상하면 `codex exec --json "test"` 출력을 확인해 주세요. Codex 사용량은 OpenAI 계정에서 과금됩니다.
 
+## 원격 화면 보기
+
+PC 카드의 **[🖥 화면]** 버튼을 누르면 그 PC 의 실제 화면 스크린샷을 찍어와 보여줍니다. "자동 새로고침(5초)" 을 켜면 준실시간으로 감시할 수 있습니다 — 프롬프트로 작업시키면서 결과 화면을 눈으로 확인하는 용도입니다.
+
+- **macOS**: 처음 사용 시 시스템 설정 → 개인정보 보호 및 보안 → **화면 기록** 에서 터미널(또는 node)을 허용해야 합니다.
+- **Windows**: PowerShell 로 캡처 (별도 설정 불필요). **Linux**: ImageMagick(`import`) 또는 `scrot` 필요.
+- 커스텀/테스트: 에이전트 설정 `screenshotCmd` (예: `"cp test/fixture-screen.jpg {out}"`).
+- 화면 이미지는 저장되지 않고 대시보드로만 중계됩니다.
+
+마우스·키보드까지 원격 제어가 필요하면 이 기능 대신 **Tailscale + macOS 화면 공유(VNC)** 또는 [RustDesk](https://rustdesk.com)(무료·자체호스팅)를 쓰세요.
+
 ## 반드시 읽을 것: 보안
 
 이 시스템은 **웹에서 입력한 프롬프트가 각 PC에서 코드 실행으로 이어지는** 구조입니다. 토큰이 유출되면 모든 PC에서 임의 명령 실행이 가능하므로:

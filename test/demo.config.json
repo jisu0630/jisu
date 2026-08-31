@@ -4,6 +4,7 @@
   "pcName": "demo-pc",
   "permissionMode": "acceptEdits",
   "claudeBin": "./mock-claude.js",
+  "screenshotCmd": "cp test/fixture-screen.jpg {out}",
   "engines": {
     "codex": { "bin": "./mock-codex.js", "extraArgs": [] }
   },

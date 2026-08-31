@@ -3,7 +3,7 @@
 // - 허브에 WebSocket 으로 접속해 이 PC의 프로젝트/세션 상태를 보고
 // - 대시보드에서 온 명령(세션 시작 / 프롬프트 / 중지)을 받아
 //   `claude --print --input-format stream-json --output-format stream-json` 프로세스를 관리
-import { spawn } from 'node:child_process';
+import { spawn, exec } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -414,6 +414,52 @@ function promptSession({ sessionKey, text }) {
   reportState();
 }
 
+/* ---------------- 화면 스크린샷 ----------------
+ * 대시보드의 [화면] 버튼 요청에 이 PC 의 실제 화면을 캡처해 보낸다.
+ * macOS: screencapture(시스템 설정 → 개인정보 보호 → 화면 기록에서 허용 필요)
+ * Windows: PowerShell, Linux: ImageMagick(import) 또는 scrot
+ * 테스트/커스텀: 설정 screenshotCmd ("{out}" 자리에 출력 파일 경로) */
+const SCREENSHOT_CMD = cfg.screenshotCmd || null;
+let lastShotAt = 0;
+
+function captureCommand(out) {
+  if (SCREENSHOT_CMD) return SCREENSHOT_CMD.replaceAll('{out}', out);
+  if (process.platform === 'darwin') return `screencapture -x -m -t jpg "${out}" && sips -Z 1400 "${out}" >/dev/null`;
+  if (process.platform === 'win32') {
+    return 'powershell -NoProfile -Command "'
+      + 'Add-Type -AssemblyName System.Windows.Forms,System.Drawing; '
+      + '$b=[System.Windows.Forms.SystemInformation]::VirtualScreen; '
+      + '$bmp=New-Object Drawing.Bitmap $b.Width,$b.Height; '
+      + '$g=[Drawing.Graphics]::FromImage($bmp); '
+      + '$g.CopyFromScreen($b.Left,$b.Top,0,0,$bmp.Size); '
+      + `$bmp.Save('${out.replace(/\\/g, '\\\\')}',[Drawing.Imaging.ImageFormat]::Jpeg)"`;
+  }
+  return `import -window root -resize 1400 "${out}" 2>/dev/null || scrot -o "${out}"`;
+}
+
+function takeScreenshot() {
+  const now = Date.now();
+  if (now - lastShotAt < 1500) return; // 과도한 연속 요청 방지
+  lastShotAt = now;
+  const out = path.join(os.tmpdir(), `fleet-shot-${process.pid}.jpg`);
+  exec(captureCommand(out), { timeout: 15000 }, (err) => {
+    try {
+      if (err) throw err;
+      const buf = fs.readFileSync(out);
+      fs.unlinkSync(out);
+      if (buf.length > 5 * 1024 * 1024) throw new Error('스크린샷이 너무 큽니다 (5MB 초과)');
+      const mime = buf[0] === 0x89 ? 'image/png' : 'image/jpeg';
+      sendToHub({ type: 'screenshot_data', ts: Date.now(), mime, image: buf.toString('base64') });
+    } catch (e) {
+      sendToHub({
+        type: 'screenshot_data', ts: Date.now(),
+        error: `화면 캡처 실패: ${e.message}`
+          + (process.platform === 'darwin' ? ' (macOS: 시스템 설정 → 개인정보 보호 → 화면 기록에서 터미널/node 허용 필요)' : ''),
+      });
+    }
+  });
+}
+
 function applyEngineSwitch(session, engine) {
   // 현재 엔진의 네이티브 세션을 보관해 두고(다시 돌아오면 resume), 새 엔진으로 전환
   session.engineState[session.engine] = { sessionId: session.sessionId, seen: session.transcript.length };
@@ -504,6 +550,7 @@ function connect() {
       case 'prompt': promptSession(msg); break;
       case 'set_model': setModel(msg); break;
       case 'set_engine': setEngine(msg); break;
+      case 'screenshot': takeScreenshot(); break;
       case 'stop_session': stopSession(msg); break;
       default: break;
     }

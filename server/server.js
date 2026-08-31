@@ -220,6 +220,13 @@ function handleAgentMessage(pcName, msg) {
         send(ws, { type: 'event', pc: pcName, sessionKey: msg.sessionKey, event: msg.event });
       }
       break;
+    case 'screenshot_data':
+      // 화면 캡처 결과는 저장하지 않고 대시보드로만 중계
+      if (msg.image && msg.image.length > 8 * 1024 * 1024) break;
+      for (const ws of dashboards) {
+        send(ws, { type: 'screenshot_data', pc: pcName, ts: msg.ts, mime: msg.mime, image: msg.image, error: msg.error });
+      }
+      break;
     default:
       break;
   }
@@ -241,6 +248,7 @@ function handleDashboardMessage(ws, msg) {
     case 'prompt':
     case 'set_model':
     case 'set_engine':
+    case 'screenshot':
     case 'stop_session': {
       const agent = agentSockets.get(msg.pc);
       if (!agent) {

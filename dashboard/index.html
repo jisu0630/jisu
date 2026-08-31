@@ -58,6 +58,22 @@
   .pc-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
   .pc-head .name { font-weight: 700; font-size: 14.5px; }
   .pc-head .meta { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+  .pc-head .shot {
+    flex: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    border-radius: 6px; font-size: 12px; padding: 2px 8px; cursor: pointer;
+  }
+  .pc-head .shot:hover { border-color: var(--accent); }
+  .pc-head .shot:disabled { opacity: .35; cursor: default; }
+  #screen-dialog { width: min(1200px, 96vw); }
+  #screen-dialog .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12.5px; color: var(--ink-2); flex-wrap: wrap; }
+  #screen-dialog .bar b { color: var(--ink); }
+  #screen-dialog .bar button {
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px;
+  }
+  #screen-dialog .bar button:hover { border-color: var(--accent); }
+  #screen-img { width: 100%; border-radius: 8px; border: 1px solid var(--border); background: #000; min-height: 200px; }
+  #screen-status { font-size: 12px; color: var(--ink-3); }
   .pc-body { padding: 6px 8px 10px; }
   .group { padding: 8px 8px 3px; font-size: 11px; color: var(--ink-3); letter-spacing: .3px; }
   .proj { display: flex; align-items: center; gap: 6px; padding: 5px 8px; font-size: 12.5px; color: var(--ink-2); border-radius: 8px; }
@@ -188,6 +204,21 @@
   </aside>
 </main>
 
+<dialog id="screen-dialog">
+  <div class="bar">
+    <b id="screen-pc"></b>
+    <span id="screen-status"></span>
+    <span style="margin-left:auto;display:flex;gap:10px;align-items:center">
+      <label style="display:flex;align-items:center;gap:5px;margin:0;font-size:12px">
+        <input type="checkbox" id="screen-auto"> 자동 새로고침 (5초)
+      </label>
+      <button id="screen-refresh">새로고침</button>
+      <button id="screen-close">✕ 닫기</button>
+    </span>
+  </div>
+  <img id="screen-img" alt="원격 화면">
+</dialog>
+
 <dialog id="token-dialog">
   <h2>허브 접속 토큰</h2>
   <label for="token-input">서버의 FLEET_TOKEN 값을 입력하세요</label>
@@ -284,6 +315,7 @@ function connect() {
         scrollBottom();
       }
     }
+    else if (msg.type === 'screenshot_data') { onScreenshot(msg); }
     else if (msg.type === 'error') { alert(msg.message); }
   };
 }
@@ -344,7 +376,13 @@ function renderBoard() {
     meta.textContent = pc.online
       ? `온라인 · 세션 ${sessList.length}${running ? ` · 실행 ${running}` : ''}`
       : `오프라인 · ${timeAgo(pc.lastSeen)}`;
-    head.append(dot, name, meta);
+    const shotBtn = document.createElement('button');
+    shotBtn.className = 'shot';
+    shotBtn.textContent = '🖥 화면';
+    shotBtn.title = '이 PC 의 실제 화면 보기';
+    shotBtn.disabled = !pc.online;
+    shotBtn.onclick = () => openScreen(pc.name);
+    head.append(dot, name, meta, shotBtn);
     el.appendChild(head);
 
     const body = document.createElement('div');
@@ -626,6 +664,45 @@ $('prompt-input').addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.body.classList.contains('panel-open')) closePanel();
 });
+
+/* ---------- 원격 화면 보기 ---------- */
+let screenPc = null;
+let screenTimer = null;
+
+function requestShot() {
+  if (screenPc) send({ type: 'screenshot', pc: screenPc });
+}
+function openScreen(pc) {
+  screenPc = pc;
+  $('screen-pc').textContent = pc;
+  $('screen-status').textContent = '캡처 요청 중…';
+  $('screen-img').removeAttribute('src');
+  $('screen-dialog').showModal();
+  requestShot();
+  syncScreenTimer();
+}
+function closeScreen() {
+  screenPc = null;
+  if (screenTimer) { clearInterval(screenTimer); screenTimer = null; }
+  $('screen-dialog').close();
+}
+function syncScreenTimer() {
+  if (screenTimer) { clearInterval(screenTimer); screenTimer = null; }
+  if ($('screen-auto').checked && screenPc) screenTimer = setInterval(requestShot, 5000);
+}
+function onScreenshot(msg) {
+  if (!screenPc || msg.pc !== screenPc) return;
+  if (msg.error) {
+    $('screen-status').textContent = msg.error;
+    return;
+  }
+  $('screen-img').src = `data:${msg.mime || 'image/jpeg'};base64,${msg.image}`;
+  $('screen-status').textContent = `캡처 시각 ${new Date(msg.ts).toLocaleTimeString()}`;
+}
+$('screen-refresh').addEventListener('click', requestShot);
+$('screen-close').addEventListener('click', closeScreen);
+$('screen-auto').addEventListener('change', syncScreenTimer);
+$('screen-dialog').addEventListener('close', () => { if (screenPc) closeScreen(); });
 
 /* ---------- 새 세션 ---------- */
 function fillModelSelect() {
