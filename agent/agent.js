@@ -147,6 +147,12 @@ function spawnClaude(session, resumeId) {
     } else if (event.type === 'result') {
       session.status = 'idle';
       session.pendingTurn = false;
+      if (session.pendingModelRestart) {
+        session.pendingModelRestart = false;
+        session.restarting = true;
+        proc.kill();
+        emitEvent(session.key, { type: 'agent', text: `모델 변경 적용: ${session.model || '기본 모델'}` });
+      }
     } else if (event.type === 'assistant') {
       session.status = 'running';
     }
@@ -168,6 +174,14 @@ function spawnClaude(session, resumeId) {
   });
 
   proc.on('exit', (code) => {
+    if (session.restarting) {
+      // 모델 변경 등으로 의도적으로 재시작하는 경우: 다음 프롬프트에서 --resume 으로 살아난다
+      session.restarting = false;
+      session.status = 'idle';
+      session.updatedAt = Date.now();
+      reportState();
+      return;
+    }
     if (session.status !== 'stopped' && session.status !== 'error') {
       session.status = code === 0 ? 'exited' : 'error';
     }
@@ -347,6 +361,29 @@ function promptSession({ sessionKey, text }) {
   reportState();
 }
 
+function setModel({ sessionKey, model }) {
+  const session = sessions.get(sessionKey);
+  if (!session) return;
+  session.model = typeof model === 'string' && model.trim() ? model.trim().slice(0, 64) : null;
+  const label = session.model || '기본 모델';
+  session.updatedAt = Date.now();
+  const alive = session.proc && session.proc.exitCode === null && !session.proc.killed;
+  if (session.engine === 'claude' && alive) {
+    if (session.status === 'running') {
+      // 진행 중인 턴을 끊지 않고, 끝나는 시점에 재시작(--resume)하며 적용
+      session.pendingModelRestart = true;
+      emitEvent(sessionKey, { type: 'agent', text: `모델 변경 예약: ${label} — 진행 중인 턴이 끝나면 적용됩니다` });
+    } else {
+      session.restarting = true;
+      session.proc.kill();
+      emitEvent(sessionKey, { type: 'agent', text: `모델 변경: ${label} — 다음 프롬프트부터 적용됩니다` });
+    }
+  } else {
+    emitEvent(sessionKey, { type: 'agent', text: `모델 변경: ${label} — 다음 턴부터 적용됩니다` });
+  }
+  reportState();
+}
+
 function stopSession({ sessionKey }) {
   const session = sessions.get(sessionKey);
   if (!session) return;
@@ -372,6 +409,7 @@ function connect() {
     switch (msg.type) {
       case 'start_session': startSession(msg); break;
       case 'prompt': promptSession(msg); break;
+      case 'set_model': setModel(msg); break;
       case 'stop_session': stopSession(msg); break;
       default: break;
     }

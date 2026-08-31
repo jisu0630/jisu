@@ -86,6 +86,10 @@
   }
   #sess-head .stop { margin-left: auto; border: 1px solid var(--border); background: var(--surface-2); color: var(--bad);
     border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+  #sess-head select {
+    background: var(--bg); color: var(--ink); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px; padding: 2px 6px; max-width: 180px;
+  }
   #transcript { flex: 1; overflow-y: auto; padding: 16px; }
   #transcript .inner { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
 
@@ -366,13 +370,33 @@ function renderSessHead() {
   eng.className = 'eng ' + (s?.engine || 'claude');
   eng.textContent = s?.engine === 'codex' ? 'CODEX' : 'CLAUDE';
   const t = document.createElement('span');
-  const modelTxt = s?.model ? ` · ${s.model}` : '';
-  t.textContent = `${selected.pc} / ${s ? s.project : ''}${modelTxt} — ${s && s.sessionId ? s.sessionId.slice(0, 8) : selected.sessionKey}`;
+  t.textContent = `${selected.pc} / ${s ? s.project : ''} — ${s && s.sessionId ? s.sessionId.slice(0, 8) : selected.sessionKey}`;
+
+  // 진행 중에도 모델 변경 가능: Claude 는 --resume 재시작, Codex 는 다음 턴부터 적용
+  const pcInfo = fleet.find((p) => p.name === selected.pc);
+  const modelSel = document.createElement('select');
+  modelSel.title = '모델 변경 (다음 턴부터 적용)';
+  const engineName = s?.engine || 'claude';
+  const models = pcInfo?.models?.[engineName] || FALLBACK_MODELS[engineName] || [];
+  const list = s?.model && !models.includes(s.model) ? [s.model, ...models] : models;
+  const defOpt = document.createElement('option');
+  defOpt.value = '';
+  defOpt.textContent = '기본 모델';
+  modelSel.appendChild(defOpt);
+  for (const m of list) {
+    const o = document.createElement('option');
+    o.value = m;
+    o.textContent = m;
+    modelSel.appendChild(o);
+  }
+  modelSel.value = s?.model || '';
+  modelSel.onchange = () => send({ type: 'set_model', pc: selected.pc, sessionKey: selected.sessionKey, model: modelSel.value || null });
+
   const stop = document.createElement('button');
   stop.className = 'stop';
   stop.textContent = '세션 중지';
   stop.onclick = () => send({ type: 'stop_session', pc: selected.pc, sessionKey: selected.sessionKey });
-  head.append(pill, eng, t, stop);
+  head.append(pill, eng, t, modelSel, stop);
 }
 
 /* ---------- 트랜스크립트 렌더링 ---------- */

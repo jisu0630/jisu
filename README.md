@@ -69,7 +69,7 @@ npm run demo:agent                                       # 터미널 2
 | `includePartialMessages` | `true` 면 토큰 단위 실시간 스트리밍 (트래픽 증가) |
 | `claudeBin` | claude 실행 파일 (기본 `claude`, 경로 지정 가능) |
 | `engines.codex` | 설정하면 대시보드에서 Codex 세션도 시작 가능 (아래 참고) |
-| `models` | 새 세션 모달의 모델 드롭다운 목록. 기본값: claude `fable/opus/sonnet/haiku`, codex `gpt-5.1-codex/-mini/gpt-5.1`. 예: `"models": { "claude": ["opus"], "codex": ["gpt-5.1-codex"] }` |
+| `models` | 새 세션·헤더의 모델 드롭다운 목록. 기본값: claude `fable/opus/sonnet/haiku`, codex `gpt-5.1-codex/-mini/gpt-5.1`. 예: `"models": { "claude": ["opus"], "codex": ["gpt-5.1-codex"] }` |
 
 ## Codex 같이 쓰기
 
@@ -78,6 +78,8 @@ npm run demo:agent                                       # 터미널 2
 ```json
 "engines": { "codex": { "bin": "codex", "extraArgs": ["--full-auto"] } }
 ```
+
+모델은 [새 세션] 모달에서 고르고, **진행 중에도 세션 헤더의 드롭다운으로 변경**할 수 있습니다 — Claude 는 `--resume` 재시작으로 대화를 유지한 채 다음 프롬프트부터, Codex 는 다음 턴부터 새 모델이 적용됩니다 (턴 진행 중이면 끝난 뒤 적용).
 
 그러면 대시보드의 [새 세션] 모달에 **Claude / Codex 선택**이 생기고, 같은 화면에서 두 엔진 세션을 나란히 띄워 번갈아 쓸 수 있습니다 (세션마다 CLAUDE / CODEX 뱃지 표시). 내부적으로 Codex 는 `codex exec --json` 으로 턴을 실행하고 `codex exec resume <thread_id>` 로 대화를 이어갑니다. 이전 턴이 끝나기 전에 보낸 프롬프트는 대기열에 쌓였다가 자동 전송됩니다.
 
