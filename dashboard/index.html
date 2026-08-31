@@ -46,16 +46,39 @@
 
   /* ---- 사이드바 ---- */
   #sidebar {
-    width: 290px; flex: none; overflow-y: auto;
-    border-right: 1px solid var(--border); background: var(--surface); padding: 10px;
+    width: 300px; flex: none; display: flex; flex-direction: column; min-height: 0;
+    border-right: 1px solid var(--border); background: var(--surface);
   }
+  body.sidebar-hidden #sidebar { display: none; }
+  #sidebar-top { flex: none; padding: 10px 10px 6px; }
+  #search {
+    width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 12.5px; outline: none;
+  }
+  #search:focus { border-color: var(--accent); }
+  #pc-list { flex: 1; overflow-y: auto; padding: 4px 10px 10px; }
+  #menu-btn {
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 14px; line-height: 1;
+  }
+  #menu-btn:hover { border-color: var(--accent); }
   .pc { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: var(--bg); overflow: hidden; }
-  .pc-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+  .pc-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
+  .pc-head:hover { background: var(--surface-2); }
   .pc-head .name { font-weight: 700; }
-  .pc-head .meta { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+  .pc-head .meta { margin-left: auto; font-size: 11px; color: var(--ink-3); text-align: right; }
+  .chev { flex: none; color: var(--ink-3); font-size: 10px; width: 12px; transition: transform .15s; }
+  .chev.open { transform: rotate(90deg); }
+  .group {
+    display: flex; align-items: center; gap: 6px; padding: 6px 8px 2px; cursor: pointer; user-select: none;
+    font-size: 11px; color: var(--ink-3); letter-spacing: .3px;
+  }
+  .group:hover { color: var(--ink-2); }
+  .group .cnt { color: var(--ink-3); }
   .pc-body { padding: 0 8px 8px; }
   .proj { display: flex; align-items: center; gap: 6px; padding: 5px 6px; font-size: 12.5px; color: var(--ink-2); }
-  .proj .path { color: var(--ink-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proj > span:first-child { white-space: nowrap; }
+  .proj .path { flex: 1; min-width: 0; color: var(--ink-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .proj button {
     margin-left: auto; flex: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
     border-radius: 6px; font-size: 11.5px; padding: 2px 8px; cursor: pointer;
@@ -147,11 +170,15 @@
 </head>
 <body>
 <header>
+  <button id="menu-btn" title="PC 목록 보이기/숨기기">☰</button>
   <h1>Claude Fleet</h1>
   <div class="conn"><span class="dot" id="conn-dot"></span><span id="conn-text">연결 중…</span></div>
 </header>
 <main>
-  <nav id="sidebar"><div class="empty">허브에 연결하면 PC 목록이 표시됩니다.</div></nav>
+  <nav id="sidebar">
+    <div id="sidebar-top"><input id="search" type="search" placeholder="PC · 프로젝트 · 세션 검색"></div>
+    <div id="pc-list"><div class="empty">허브에 연결하면 PC 목록이 표시됩니다.</div></div>
+  </nav>
   <section id="content">
     <div class="placeholder" id="placeholder">왼쪽에서 세션을 선택하거나, 프로젝트의 [새 세션]을 눌러 시작하세요.</div>
     <div id="sess-head" hidden></div>
@@ -273,59 +300,144 @@ function subscribe(pc, sessionKey) {
 }
 
 /* ---------- 사이드바 ---------- */
+// 접기/펼치기 상태는 브라우저에 저장 (PC 카드, 프로젝트/세션 그룹, 사이드바 표시)
+const uiState = (() => {
+  try { return JSON.parse(localStorage.getItem('fleet_ui') || '{}'); } catch { return {}; }
+})();
+uiState.collapsedPcs = uiState.collapsedPcs || {};
+uiState.openProjects = uiState.openProjects || {};
+uiState.openSessions = uiState.openSessions || {};
+function saveUi() { try { localStorage.setItem('fleet_ui', JSON.stringify(uiState)); } catch {} }
+
+if (uiState.sidebarHidden) document.body.classList.add('sidebar-hidden');
+$('menu-btn').addEventListener('click', () => {
+  uiState.sidebarHidden = document.body.classList.toggle('sidebar-hidden');
+  saveUi();
+});
+
+let searchQuery = '';
+$('search').addEventListener('input', (e) => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  renderSidebar();
+});
+
+function makeGroup(label, count, open, onToggle) {
+  const g = document.createElement('div');
+  g.className = 'group';
+  const chev = document.createElement('span');
+  chev.className = 'chev' + (open ? ' open' : '');
+  chev.textContent = '▶';
+  g.append(chev, `${label} `);
+  const cnt = document.createElement('span');
+  cnt.className = 'cnt';
+  cnt.textContent = `(${count})`;
+  g.appendChild(cnt);
+  g.onclick = onToggle;
+  return g;
+}
+
 function renderSidebar() {
-  const nav = $('sidebar');
+  const nav = $('pc-list');
   nav.innerHTML = '';
   if (!fleet.length) {
     nav.innerHTML = '<div class="empty">접속한 PC 가 없습니다. 각 PC 에서 에이전트를 실행하세요:<br><code>npm run agent</code></div>';
     return;
   }
+  const q = searchQuery;
+  let shown = 0;
   for (const pc of fleet) {
+    let projects = pc.projects || [];
+    let sessList = (pc.sessions || []).slice().sort((a, b) => b.updatedAt - a.updatedAt);
+    const pcMatch = pc.name.toLowerCase().includes(q);
+    if (q && !pcMatch) {
+      projects = projects.filter((p) => p.name.toLowerCase().includes(q));
+      sessList = sessList.filter((s) => `${s.project} ${s.title || ''}`.toLowerCase().includes(q));
+      if (!projects.length && !sessList.length) continue;
+    }
+    shown++;
+    const running = sessList.filter((s) => s.status === 'running' || s.status === 'starting').length;
+    const collapsed = q ? false : Boolean(uiState.collapsedPcs[pc.name]);
+
     const el = document.createElement('div');
     el.className = 'pc';
     const head = document.createElement('div');
     head.className = 'pc-head';
-    head.innerHTML = `<span class="dot ${pc.online ? 'on' : 'off'}"></span>
-      <span class="name"></span>
-      <span class="meta">${pc.online ? '온라인' : '오프라인 · ' + timeAgo(pc.lastSeen)}</span>`;
-    head.querySelector('.name').textContent = pc.name;
+    const chev = document.createElement('span');
+    chev.className = 'chev' + (collapsed ? '' : ' open');
+    chev.textContent = '▶';
+    const dot = document.createElement('span');
+    dot.className = `dot ${pc.online ? (running ? 'run' : 'on') : 'off'}`;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = pc.name;
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = pc.online
+      ? `세션 ${sessList.length}${running ? ` · 실행 ${running}` : ''}`
+      : `오프라인 · ${timeAgo(pc.lastSeen)}`;
+    head.append(chev, dot, name, meta);
+    head.onclick = () => {
+      uiState.collapsedPcs[pc.name] = !uiState.collapsedPcs[pc.name];
+      saveUi();
+      renderSidebar();
+    };
     el.appendChild(head);
 
-    const body = document.createElement('div');
-    body.className = 'pc-body';
-    for (const proj of pc.projects || []) {
-      const row = document.createElement('div');
-      row.className = 'proj';
-      const nm = document.createElement('span'); nm.textContent = '📁 ' + proj.name;
-      const pt = document.createElement('span'); pt.className = 'path'; pt.textContent = proj.path;
-      const btn = document.createElement('button'); btn.textContent = '새 세션';
-      btn.disabled = !pc.online;
-      btn.onclick = () => openNewDialog(pc.name, proj.name);
-      row.append(nm, pt, btn);
-      body.appendChild(row);
+    if (!collapsed) {
+      const body = document.createElement('div');
+      body.className = 'pc-body';
+
+      const projOpen = q ? true : (uiState.openProjects[pc.name] ?? projects.length <= 4);
+      body.appendChild(makeGroup('프로젝트', projects.length, projOpen, () => {
+        uiState.openProjects[pc.name] = !projOpen;
+        saveUi();
+        renderSidebar();
+      }));
+      if (projOpen) {
+        for (const proj of projects) {
+          const row = document.createElement('div');
+          row.className = 'proj';
+          const nm = document.createElement('span'); nm.textContent = '📁 ' + proj.name;
+          const pt = document.createElement('span'); pt.className = 'path'; pt.textContent = proj.path;
+          const btn = document.createElement('button'); btn.textContent = '새 세션';
+          btn.disabled = !pc.online;
+          btn.onclick = () => openNewDialog(pc.name, proj.name);
+          row.append(nm, pt, btn);
+          body.appendChild(row);
+        }
+      }
+
+      const sessOpen = q ? true : (uiState.openSessions[pc.name] ?? true);
+      body.appendChild(makeGroup('세션', sessList.length, sessOpen, () => {
+        uiState.openSessions[pc.name] = !sessOpen;
+        saveUi();
+        renderSidebar();
+      }));
+      if (sessOpen) {
+        for (const s of sessList) {
+          const [label, dotCls] = STATUS_LABEL[s.status] || [s.status, ''];
+          const row = document.createElement('div');
+          row.className = 'sess' + (selected && selected.pc === pc.name && selected.sessionKey === s.key ? ' active' : '');
+          const pill = document.createElement('span');
+          pill.className = 'pill';
+          pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
+          pill.append(label);
+          const eng = document.createElement('span');
+          eng.className = 'eng ' + (s.engine || 'claude');
+          eng.textContent = s.engine === 'codex' ? 'CODEX' : 'CLAUDE';
+          const title = document.createElement('span');
+          title.className = 'title';
+          title.textContent = `${s.project} · ${s.title || s.key}`;
+          row.append(pill, eng, title);
+          row.onclick = () => selectSession(pc.name, s.key);
+          body.appendChild(row);
+        }
+      }
+      el.appendChild(body);
     }
-    const sessList = (pc.sessions || []).slice().sort((a, b) => b.updatedAt - a.updatedAt);
-    for (const s of sessList) {
-      const [label, dotCls] = STATUS_LABEL[s.status] || [s.status, ''];
-      const row = document.createElement('div');
-      row.className = 'sess' + (selected && selected.pc === pc.name && selected.sessionKey === s.key ? ' active' : '');
-      const pill = document.createElement('span');
-      pill.className = 'pill';
-      pill.innerHTML = `<span class="dot ${dotCls}"></span>`;
-      pill.append(label);
-      const eng = document.createElement('span');
-      eng.className = 'eng ' + (s.engine || 'claude');
-      eng.textContent = s.engine === 'codex' ? 'CODEX' : 'CLAUDE';
-      const title = document.createElement('span');
-      title.className = 'title';
-      title.textContent = `${s.project} · ${s.title || s.key}`;
-      row.append(pill, eng, title);
-      row.onclick = () => selectSession(pc.name, s.key);
-      body.appendChild(row);
-    }
-    el.appendChild(body);
     nav.appendChild(el);
   }
+  if (q && !shown) nav.innerHTML = '<div class="empty">검색 결과가 없습니다.</div>';
 }
 
 function timeAgo(ts) {
