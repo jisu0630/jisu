@@ -28,7 +28,13 @@ cd claude-fleet && npm install && npm run setup
 
 수동으로 설정하려면 `agent/fleet-agent.config.example.json` 을 복사해 `fleet-agent.config.json` 을 만들고, 허브는 `FLEET_TOKEN=... npm run server` 로 실행해도 됩니다.
 
-터미널을 닫아도 유지하려면 pm2 / systemd / tmux 등으로 상주시키세요:
+**macOS(맥미니 등)에서는** setup 후 아래 한 줄로 로그인 시 자동 시작 + 죽으면 재시작까지 등록됩니다 (허브/에이전트 설정된 것만 자동 감지, 해제는 `uninstall` 인자):
+
+```bash
+bash scripts/install-macos.sh
+```
+
+다른 OS에서 터미널을 닫아도 유지하려면 pm2 / systemd / tmux 등으로 상주시키세요:
 
 ```bash
 npx pm2 start "npm run agent" --name claude-fleet-agent
