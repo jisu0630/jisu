@@ -263,8 +263,96 @@ function handleDashboardMessage(ws, msg) {
   }
 }
 
+/* ---- HTTP API ----
+ * 대시보드 없이도(예: 외부 자동화, 클라우드의 Claude 채팅) 허브에 명령을 내릴 수 있다.
+ * 인증: Authorization: Bearer <FLEET_TOKEN>
+ *   GET  /api/fleet                              PC/프로젝트/세션 현황
+ *   POST /api/start   {pc, project, prompt, engine?, model?}  → {sessionKey}
+ *   POST /api/prompt  {pc, sessionKey, text}
+ *   POST /api/stop    {pc, sessionKey}
+ *   GET  /api/history?pc=..&sessionKey=..&format=text|json    세션 대화 조회 */
+function apiAuthed(req) {
+  const h = req.headers.authorization || '';
+  return h.startsWith('Bearer ') && safeTokenEqual(h.slice(7).trim());
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (c) => {
+      data += c;
+      if (data.length > 256 * 1024) { reject(new Error('body too large')); req.destroy(); }
+    });
+    req.on('end', () => {
+      try { resolve(data ? JSON.parse(data) : {}); } catch { reject(new Error('invalid JSON')); }
+    });
+    req.on('error', reject);
+  });
+}
+
+function historyToText(events) {
+  const lines = [];
+  for (const ev of events) {
+    if (ev.type === 'user_input') lines.push(`[사용자] ${ev.text}`);
+    else if (ev.type === 'assistant') {
+      for (const b of ev.message?.content || []) {
+        if (b.type === 'text' && b.text?.trim()) lines.push(`[어시스턴트] ${b.text}`);
+        else if (b.type === 'tool_use') lines.push(`[도구] ${b.name} ${String(b.input?.command || b.input?.file_path || '').slice(0, 120)}`);
+      }
+    } else if (ev.type === 'result') lines.push('[턴 완료]');
+    else if (ev.type === 'stderr') lines.push(`[오류] ${ev.text}`);
+    else if (ev.type === 'agent') lines.push(`[안내] ${ev.text}`);
+  }
+  return lines.join('\n');
+}
+
+async function handleApi(req, res, u) {
+  const json = (code, obj) => {
+    res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(obj));
+  };
+  if (!apiAuthed(req)) return json(401, { error: 'unauthorized' });
+
+  try {
+    if (req.method === 'GET' && u.pathname === '/api/fleet') {
+      return json(200, fleetSnapshot());
+    }
+    if (req.method === 'GET' && u.pathname === '/api/history') {
+      const pc = u.searchParams.get('pc');
+      const sessionKey = u.searchParams.get('sessionKey');
+      let buf = buffers.get(bufferKey(pc, sessionKey));
+      if (!buf || !buf.length) buf = loadBufferFromDisk(pc, sessionKey);
+      if (u.searchParams.get('format') === 'json') return json(200, { events: buf });
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      return res.end(historyToText(buf) || '(기록 없음)');
+    }
+    if (req.method === 'POST' && ['/api/start', '/api/prompt', '/api/stop'].includes(u.pathname)) {
+      const body = await readJsonBody(req);
+      const agent = agentSockets.get(body.pc);
+      if (!agent) return json(404, { error: `PC "${body.pc}" 가 오프라인이거나 없습니다`, online_pcs: [...agentSockets.keys()] });
+      if (u.pathname === '/api/start') {
+        if (!body.project) return json(400, { error: 'project 필요' });
+        const sessionKey = crypto.randomBytes(4).toString('hex');
+        send(agent, { type: 'start_session', sessionKey, pc: body.pc, project: body.project, engine: body.engine, model: body.model, prompt: body.prompt });
+        return json(200, { ok: true, sessionKey, hint: `진행 상황: GET /api/history?pc=${body.pc}&sessionKey=${sessionKey}` });
+      }
+      if (u.pathname === '/api/prompt') {
+        if (!body.sessionKey || !body.text) return json(400, { error: 'sessionKey 와 text 필요' });
+        send(agent, { type: 'prompt', pc: body.pc, sessionKey: body.sessionKey, text: body.text });
+        return json(200, { ok: true });
+      }
+      send(agent, { type: 'stop_session', pc: body.pc, sessionKey: body.sessionKey });
+      return json(200, { ok: true });
+    }
+    return json(404, { error: 'unknown endpoint' });
+  } catch (e) {
+    return json(400, { error: e.message });
+  }
+}
+
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
+  if (u.pathname.startsWith('/api/')) { handleApi(req, res, u); return; }
   if (u.pathname === '/' || u.pathname === '/index.html') {
     fs.readFile(DASHBOARD_HTML, (err, data) => {
       if (err) {

@@ -341,12 +341,15 @@ function runCodexTurn(session, text) {
   reportState();
 }
 
-function startSession({ project: projectName, prompt, engine, model }) {
+function startSession({ project: projectName, prompt, engine, model, sessionKey }) {
   const project = PROJECTS.find((p) => p.name === projectName);
   if (!project) return;
   const eng = engine === 'codex' ? 'codex' : 'claude';
   if (eng === 'codex' && !CODEX) return;
-  const key = crypto.randomBytes(4).toString('hex');
+  // HTTP API 를 통한 시작은 허브가 키를 미리 지정해 응답에 돌려준다
+  const key = /^[0-9a-f]{8}$/.test(sessionKey || '') && !sessions.has(sessionKey)
+    ? sessionKey
+    : crypto.randomBytes(4).toString('hex');
   const session = {
     key,
     project,

@@ -99,6 +99,33 @@ PC 카드의 **[🖥 화면]** 버튼을 누르면 그 PC 의 실제 화면 스�
 
 마우스·키보드까지 원격 제어가 필요하면 이 기능 대신 **Tailscale + macOS 화면 공유(VNC)** 또는 [RustDesk](https://rustdesk.com)(무료·자체호스팅)를 쓰세요.
 
+## HTTP API — 채팅의 Claude 에게 "저 PC에 이거 시켜" 하기
+
+허브는 대시보드 외에 HTTP API 도 제공합니다 (`Authorization: Bearer <FLEET_TOKEN>`):
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/fleet` | PC/프로젝트/세션 현황 |
+| POST | `/api/start` | `{pc, project, prompt, engine?, model?}` → `{sessionKey}` |
+| POST | `/api/prompt` | `{pc, sessionKey, text}` |
+| POST | `/api/stop` | `{pc, sessionKey}` |
+| GET | `/api/history?pc=..&sessionKey=..` | 대화 내용 (기본 텍스트, `&format=json` 가능) |
+
+**클라우드 Claude 채팅(claude.ai/code)을 사령탑으로 쓰려면**, 클라우드에서 허브에 접근할 수 있어야 하므로 맥미니에서 HTTPS 터널을 하나 엽니다:
+
+```bash
+tailscale funnel 8787        # https://맥미니이름.xxxx.ts.net 발급 (Tailscale 설치 시)
+# 또는: cloudflared tunnel --url http://localhost:8787
+```
+
+그 다음 새 Claude 채팅에서 이렇게 말하면 됩니다:
+
+> 내 fleet 허브는 https://…ts.net 이고 토큰은 XXX야. office-pc 의 crawler 프로젝트에 "테스트 돌리고 실패 고쳐줘" 세션 시작하고 결과 알려줘.
+
+Claude 가 API 를 호출해 세션을 시작하고, history 를 조회해 결과를 요약해 줍니다.
+
+⚠ 터널을 여는 순간 허브가 (URL 을 아는 사람에게) 인터넷에서 접근 가능해집니다. 토큰이 유일한 방어선이므로 반드시 길게 유지하고, 채팅에 붙여넣는 것이 부담되면 터널을 쓰지 말고 대시보드(사설망)만 쓰세요. 토큰이 새면 즉시 `.fleet-token` 을 바꾸면 됩니다.
+
 ## 반드시 읽을 것: 보안
 
 이 시스템은 **웹에서 입력한 프롬프트가 각 PC에서 코드 실행으로 이어지는** 구조입니다. 토큰이 유출되면 모든 PC에서 임의 명령 실행이 가능하므로:
