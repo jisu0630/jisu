@@ -49,6 +49,41 @@ curl -s -X POST -H "$AUTH" localhost:8787/api/stop -d '{"pc":"<PC이름>","sessi
   사용자에게 보고하라.
 - 사용자가 명시하지 않은 PC/프로젝트에 임의로 작업을 시키지 마라.
 
+## 직결 모드 — "OO PC 에서 작업할게"
+
+사용자가 특정 PC 로 "전환할게", "직결해줘", "OO 에서 작업할게" 라고 하면, **이 채팅을
+그 PC 세션의 프롬프트 창처럼** 동작시킨다. 사령탑의 개입(요약·해석)을 멈추고 투명한
+통로가 되는 것이 핵심이다.
+
+1. **대상 확정**: `/api/fleet` 로 PC·프로젝트를 확인한다. 이어갈 만한 기존 세션이 있으면
+   그 sessionKey 를 쓰고, 없으면 `/api/start` 로 만든다. 그리고 알린다:
+   "🔗 office-pc/crawler 직결 시작 — 지금부터 입력은 그대로 그 PC 의 Claude 에게
+   전달됩니다. '직결 종료' 라고 하면 사령탑으로 돌아옵니다."
+2. **직결 중에는 사용자의 매 메시지를 그대로**(요약·수정·첨언 없이) `/api/prompt` 로
+   전달한다. 예외: "직결 종료" / "사령탑…" 으로 시작하는 메시지는 전달하지 않고 직접
+   처리한다. 임의의 텍스트를 JSON 으로 안전하게 감싸려면 python 을 써라:
+   `python3 -c 'import json,sys;print(json.dumps({"pc":sys.argv[1],"sessionKey":sys.argv[2],"text":sys.argv[3]}))' "$PC" "$KEY" "$TEXT"`
+3. **턴이 끝날 때까지 대기 후, 새로 생긴 출력을 전문 그대로 보여준다**:
+
+   ```bash
+   TOKEN=$(cat .fleet-token); AUTH="Authorization: Bearer $TOKEN"
+   H="localhost:8787/api/history?pc=$PC&sessionKey=$KEY"
+   BEFORE=$(curl -s -H "$AUTH" "$H" | wc -l)
+   # (프롬프트 전송)
+   for i in $(seq 1 120); do
+     sleep 5
+     OUT=$(curl -s -H "$AUTH" "$H")
+     echo "$OUT" | tail -n +$((BEFORE+1)) | grep -q '\[턴 완료\]' && break
+   done
+   echo "$OUT" | tail -n +$((BEFORE+1))
+   ```
+
+   출력을 요약하지 말고 그대로 전달하라. 10분(120회)을 넘기면 지금까지의 진행 내용을
+   보여주고 계속 기다릴지 물어라.
+4. **"직결 종료"** 를 받으면 "사령탑으로 복귀했습니다" 라고 알리고 원래 역할로 돌아간다.
+   직결 중이던 세션은 그 PC 에 살아 있으므로 언제든 다시 직결하거나 대시보드
+   딥링크(`/#s=<PC>/<키>`)로 이어볼 수 있다고 안내하라.
+
 ## 과거 작업 기록 (fleet-memory)
 
 허브가 모든 PC 의 세션 대화를 `fleet-memory/` 에 기록한다:

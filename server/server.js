@@ -324,7 +324,7 @@ async function handleApi(req, res, u) {
       if (!buf || !buf.length) buf = loadBufferFromDisk(pc, sessionKey);
       if (u.searchParams.get('format') === 'json') return json(200, { events: buf });
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
-      return res.end(historyToText(buf) || '(기록 없음)');
+      return res.end((historyToText(buf) || '(기록 없음)') + '\n');
     }
     if (req.method === 'POST' && ['/api/start', '/api/prompt', '/api/stop'].includes(u.pathname)) {
       const body = await readJsonBody(req);
