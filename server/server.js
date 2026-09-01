@@ -334,7 +334,11 @@ async function handleApi(req, res, u) {
         if (!body.project) return json(400, { error: 'project 필요' });
         const sessionKey = crypto.randomBytes(4).toString('hex');
         send(agent, { type: 'start_session', sessionKey, pc: body.pc, project: body.project, engine: body.engine, model: body.model, prompt: body.prompt });
-        return json(200, { ok: true, sessionKey, hint: `진행 상황: GET /api/history?pc=${body.pc}&sessionKey=${sessionKey}` });
+        return json(200, {
+          ok: true, sessionKey,
+          hint: `진행 상황: GET /api/history?pc=${body.pc}&sessionKey=${sessionKey}`,
+          live_view: `/#s=${encodeURIComponent(body.pc)}/${sessionKey}`,
+        });
       }
       if (u.pathname === '/api/prompt') {
         if (!body.sessionKey || !body.text) return json(400, { error: 'sessionKey 와 text 필요' });

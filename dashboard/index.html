@@ -264,6 +264,13 @@ let liveBubbles = new Map();
 let newTarget = null;
 let searchQuery = '';
 
+// 딥링크: #s=<PC>/<세션키> 로 열면 해당 세션 패널이 자동으로 열린다
+let pendingHash = (() => {
+  const m = location.hash.match(/^#s=([^/]+)\/([0-9a-f]{8})$/);
+  return m ? { pc: decodeURIComponent(m[1]), key: m[2] } : null;
+})();
+if (pendingHash) setTimeout(() => { pendingHash = null; }, 20000);
+
 try { token = localStorage.getItem('fleet_token'); } catch {}
 
 function askToken() { $('token-dialog').showModal(); }
@@ -300,7 +307,19 @@ function connect() {
   };
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
-    if (msg.type === 'fleet') { fleet = msg.pcs; renderBoard(); renderSessHead(); }
+    if (msg.type === 'fleet') {
+      fleet = msg.pcs;
+      renderBoard();
+      renderSessHead();
+      if (pendingHash) {
+        const pc = fleet.find((p) => p.name === pendingHash.pc);
+        if (pc && (pc.sessions || []).some((s) => s.key === pendingHash.key)) {
+          const { pc: hp, key } = pendingHash;
+          pendingHash = null;
+          selectSession(hp, key);
+        }
+      }
+    }
     else if (msg.type === 'history') {
       if (selected && msg.pc === selected.pc && msg.sessionKey === selected.sessionKey) {
         $('transcript-inner').innerHTML = '';
@@ -437,11 +456,13 @@ function openPanel() { document.body.classList.add('panel-open'); }
 function closePanel() {
   document.body.classList.remove('panel-open');
   selected = null;
+  try { history.replaceState(null, '', location.pathname); } catch {}
   renderBoard();
 }
 
 function selectSession(pc, sessionKey) {
   selected = { pc, sessionKey };
+  try { history.replaceState(null, '', `#s=${encodeURIComponent(pc)}/${sessionKey}`); } catch {}
   openPanel();
   $('transcript-inner').innerHTML = '<div class="meta">불러오는 중…</div>';
   renderBoard();
