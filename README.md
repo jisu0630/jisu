@@ -99,7 +99,24 @@ PC 카드의 **[🖥 화면]** 버튼을 누르면 그 PC 의 실제 화면 스�
 
 마우스·키보드까지 원격 제어가 필요하면 이 기능 대신 **Tailscale + macOS 화면 공유(VNC)** 또는 [RustDesk](https://rustdesk.com)(무료·자체호스팅)를 쓰세요.
 
-## HTTP API — 채팅의 Claude 에게 "저 PC에 이거 시켜" 하기
+## 맥미니를 사령탑 Claude 로 쓰기 (권장)
+
+메인 PC(허브 머신)에서 이 디렉토리로 Claude Code 를 실행하면, 저장소의 `CLAUDE.md` 지침에 따라 그 Claude 가 **사령탑**이 됩니다 — "노트북에 테스트 돌리라고 시켜", "그 작업 어떻게 됐어?" 라고 말하면 허브 API(localhost)로 직접 수행합니다. 터널·외부 노출이 전혀 필요 없습니다.
+
+```bash
+cd claude-fleet
+claude        # → "office-pc 의 crawler 에 '테스트 돌리고 실패 고쳐줘' 시켜줘"
+```
+
+**밖에서도 사령탑과 대화하려면** 같은 세션에 Remote Control 을 켜면 됩니다:
+
+```bash
+claude --remote-control "fleet-사령탑"     # 또는 세션 안에서 /remote-control
+```
+
+그러면 claude.ai / Claude 모바일 앱의 세션 목록에 이 사령탑이 나타나고, 폰에서 그 채팅에 "노트북에 이거 시켜" 라고 보내면 맥미니의 Claude 가 받아서 처리합니다. fleet-memory 도 같은 머신에 있으므로 과거 기록 질문("어제 노트북에서 뭐 했지?")에도 답할 수 있습니다.
+
+## HTTP API — 외부에서 허브에 직접 명령 (고급)
 
 허브는 대시보드 외에 HTTP API 도 제공합니다 (`Authorization: Bearer <FLEET_TOKEN>`):
 
