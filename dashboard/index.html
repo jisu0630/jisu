@@ -97,6 +97,10 @@
     font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
     border: 1px solid var(--border); color: var(--ink-2); background: var(--bg);
   }
+  .unread {
+    flex: none; background: var(--accent); color: #0b1020; font-weight: 700;
+    font-size: 10px; border-radius: 999px; padding: 1px 6px; min-width: 18px; text-align: center;
+  }
   .eng { flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .4px; padding: 1px 6px; border-radius: 4px; }
   .eng.claude { background: #37304d; color: #c4b5fd; }
   .eng.codex { background: #16382f; color: #5eead4; }
@@ -263,6 +267,18 @@ let selected = null;                  // {pc, sessionKey}
 let liveBubbles = new Map();
 let newTarget = null;
 let searchQuery = '';
+const unread = new Map();             // `${pc}/${key}` -> 안 본 새 활동 수
+const uKey = (pc, key) => `${pc}/${key}`;
+let boardTimer = null;
+function scheduleBoard() {
+  if (boardTimer) return;
+  boardTimer = setTimeout(() => { boardTimer = null; renderBoard(); }, 200);
+}
+function updateTitle() {
+  let n = 0;
+  for (const v of unread.values()) n += v;
+  document.title = (n ? `(${n}) ` : '') + 'Claude Fleet';
+}
 
 // 딥링크: #s=<PC>/<세션키> 로 열면 해당 세션 패널이 자동으로 열린다
 let pendingHash = (() => {
@@ -332,6 +348,12 @@ function connect() {
       if (selected && msg.pc === selected.pc && msg.sessionKey === selected.sessionKey) {
         renderEvent(msg.sessionKey, msg.event);
         scrollBottom();
+      } else if (['assistant', 'result', 'stderr'].includes(msg.event?.type)) {
+        // 안 보고 있는 세션의 새 활동 → 배지 카운트
+        const k = uKey(msg.pc, msg.sessionKey);
+        unread.set(k, (unread.get(k) || 0) + 1);
+        updateTitle();
+        scheduleBoard();
       }
     }
     else if (msg.type === 'screenshot_data') { onScreenshot(msg); }
@@ -442,6 +464,13 @@ function renderBoard() {
       title.className = 'title';
       title.textContent = `${s.project} · ${s.title || s.key}`;
       row.append(pill, eng, title);
+      const uc = unread.get(uKey(pc.name, s.key));
+      if (uc) {
+        const badge = document.createElement('span');
+        badge.className = 'unread';
+        badge.textContent = uc > 99 ? '99+' : String(uc);
+        row.appendChild(badge);
+      }
       row.onclick = () => selectSession(pc.name, s.key);
       body.appendChild(row);
     }
@@ -462,6 +491,8 @@ function closePanel() {
 
 function selectSession(pc, sessionKey) {
   selected = { pc, sessionKey };
+  unread.delete(uKey(pc, sessionKey));
+  updateTitle();
   try { history.replaceState(null, '', `#s=${encodeURIComponent(pc)}/${sessionKey}`); } catch {}
   openPanel();
   $('transcript-inner').innerHTML = '<div class="meta">불러오는 중…</div>';
@@ -527,8 +558,20 @@ function renderSessHead() {
 
   const stop = document.createElement('button');
   stop.className = 'stop';
-  stop.textContent = '세션 중지';
-  stop.onclick = () => send({ type: 'stop_session', pc: selected.pc, sessionKey: selected.sessionKey });
+  const ended = ['stopped', 'exited', 'error'].includes(s?.status);
+  if (ended) {
+    // 끝난 세션은 목록에서 정리 (대화 기록은 허브의 fleet-memory 에 남음)
+    stop.textContent = '목록에서 제거';
+    stop.onclick = () => {
+      send({ type: 'remove_session', pc: selected.pc, sessionKey: selected.sessionKey });
+      unread.delete(uKey(selected.pc, selected.sessionKey));
+      updateTitle();
+      closePanel();
+    };
+  } else {
+    stop.textContent = '세션 중지';
+    stop.onclick = () => send({ type: 'stop_session', pc: selected.pc, sessionKey: selected.sessionKey });
+  }
 
   const close = document.createElement('button');
   close.className = 'close';

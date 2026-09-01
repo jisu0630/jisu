@@ -526,6 +526,15 @@ function setModel({ sessionKey, model }) {
   reportState();
 }
 
+function removeSession({ sessionKey }) {
+  const session = sessions.get(sessionKey);
+  if (!session) return;
+  if (session.proc && session.proc.exitCode === null) session.proc.kill();
+  sessions.delete(sessionKey);
+  log(`세션 목록에서 제거: [${sessionKey}]`);
+  reportState();
+}
+
 function stopSession({ sessionKey }) {
   const session = sessions.get(sessionKey);
   if (!session) return;
@@ -555,6 +564,7 @@ function connect() {
       case 'set_engine': setEngine(msg); break;
       case 'screenshot': takeScreenshot(); break;
       case 'stop_session': stopSession(msg); break;
+      case 'remove_session': removeSession(msg); break;
       default: break;
     }
   });

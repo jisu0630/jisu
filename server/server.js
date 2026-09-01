@@ -198,6 +198,21 @@ function pushEvent(pc, sessionKey, event) {
   if (buf.length > MAX_EVENTS_PER_SESSION) buf.splice(0, buf.length - MAX_EVENTS_PER_SESSION);
 }
 
+// 대용량 도구 결과 등이 허브 메모리/디스크/대역폭을 잡아먹지 않도록 블록 단위로 절단
+const MAX_BLOCK_CHARS = 16384;
+function slimEvent(ev) {
+  const blocks = ev?.message?.content;
+  if (!Array.isArray(blocks)) return ev;
+  const cut = (s) => (typeof s === 'string' && s.length > MAX_BLOCK_CHARS
+    ? s.slice(0, MAX_BLOCK_CHARS) + '\n…(허브에서 생략됨)' : s);
+  for (const b of blocks) {
+    b.text = cut(b.text);
+    if (typeof b.content === 'string') b.content = cut(b.content);
+    else if (Array.isArray(b.content)) for (const c of b.content) c.text = cut(c.text);
+  }
+  return ev;
+}
+
 function handleAgentMessage(pcName, msg) {
   const pc = pcs.get(pcName);
   if (!pc) return;
@@ -214,6 +229,7 @@ function handleAgentMessage(pcName, msg) {
       break;
     case 'event':
       pc.lastSeen = Date.now();
+      msg.event = slimEvent(msg.event);
       pushEvent(pcName, msg.sessionKey, msg.event);
       persistEvent(pcName, msg);
       for (const ws of dashboards) {
@@ -249,6 +265,7 @@ function handleDashboardMessage(ws, msg) {
     case 'set_model':
     case 'set_engine':
     case 'screenshot':
+    case 'remove_session':
     case 'stop_session': {
       const agent = agentSockets.get(msg.pc);
       if (!agent) {
