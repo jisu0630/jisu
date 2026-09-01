@@ -93,6 +93,10 @@ curl -s -X POST -H "$AUTH" localhost:8787/api/stop -d '{"pc":"<PC이름>","sessi
 
 "다른 PC 에서 무슨 작업 했는지", "예전에 어떻게 해결했는지" 는 여기를 검색해 답하라.
 
+**과거 세션 이어가기**: 목록에서 제거됐거나 오래된 세션을 이어가려면 INDEX.md 에서
+세션ID 를 찾아 `/api/start` 에 `"resume":"<세션ID>"` 를 넣어 시작하라 — 그 PC 에 저장된
+원본 대화 전체를 이어받은 새 세션이 생긴다. (같은 PC·같은 프로젝트여야 한다.)
+
 ## 저장소 구조
 
 - `server/` 허브, `agent/` PC 에이전트, `dashboard/` 웹 대시보드, `test/` 목(mock) 데모

@@ -341,7 +341,7 @@ function runCodexTurn(session, text) {
   reportState();
 }
 
-function startSession({ project: projectName, prompt, engine, model, sessionKey }) {
+function startSession({ project: projectName, prompt, engine, model, sessionKey, resume }) {
   const project = PROJECTS.find((p) => p.name === projectName);
   if (!project) return;
   const eng = engine === 'codex' ? 'codex' : 'claude';
@@ -366,8 +366,11 @@ function startSession({ project: projectName, prompt, engine, model, sessionKey 
     engineState: {},
     handoffFrom: null,
   };
+  // resume: 과거(목록에서 제거된) 세션의 네이티브 ID 로 대화를 이어받는다
+  const resumeId = typeof resume === 'string' && /^[0-9a-zA-Z-]{8,64}$/.test(resume) ? resume : null;
+  if (resumeId) session.sessionId = resumeId;
   sessions.set(key, session);
-  log(`세션 시작: ${project.name} [${key}] (${eng})`);
+  log(`세션 시작: ${project.name} [${key}] (${eng})${resumeId ? ` resume=${resumeId}` : ''}`);
   if (eng === 'codex') {
     if (prompt) {
       emitEvent(key, { type: 'user_input', text: prompt, ts: Date.now() });
@@ -376,7 +379,7 @@ function startSession({ project: projectName, prompt, engine, model, sessionKey 
       session.status = 'idle';
     }
   } else {
-    spawnClaude(session);
+    spawnClaude(session, resumeId || undefined);
     if (prompt) {
       emitEvent(key, { type: 'user_input', text: prompt, ts: Date.now() });
       writeUserMessage(session, prompt);

@@ -117,6 +117,7 @@ function updateIndex(pc, sessions) {
   for (const s of sessions) {
     memIndex[`${pc}/${s.key}`] = {
       pc, project: s.project, key: s.key, engine: s.engine, title: s.title, updatedAt: s.updatedAt,
+      sessionId: s.sessionId || memIndex[`${pc}/${s.key}`]?.sessionId || null,
       file: path.relative(MEMORY_DIR, transcriptPath(pc, s.project, s.key)),
     };
   }
@@ -128,10 +129,11 @@ function writeIndex() {
   try {
     fs.writeFileSync(indexPath, JSON.stringify(memIndex, null, 2));
     const rows = Object.values(memIndex).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    let md = '# Fleet 세션 기록 색인\n\n모든 PC 의 세션 대화 기록. 상세 내용은 파일 열람.\n\n'
-      + '| 최근 활동 | PC | 프로젝트 | 엔진 | 제목 | 파일 |\n|---|---|---|---|---|---|\n';
+    let md = '# Fleet 세션 기록 색인\n\n모든 PC 의 세션 대화 기록. 상세 내용은 파일 열람.\n'
+      + '이어가기: `POST /api/start` 에 `{"resume":"<세션ID>"}` 를 넣으면 그 대화를 이어받는다.\n\n'
+      + '| 최근 활동 | PC | 프로젝트 | 엔진 | 제목 | 세션ID | 파일 |\n|---|---|---|---|---|---|---|\n';
     for (const r of rows.slice(0, 500)) {
-      md += `| ${r.updatedAt ? new Date(r.updatedAt).toISOString().slice(0, 16) : ''} | ${r.pc} | ${r.project} | ${r.engine || ''} | ${(r.title || '').replace(/\|/g, '/')} | ${r.file} |\n`;
+      md += `| ${r.updatedAt ? new Date(r.updatedAt).toISOString().slice(0, 16) : ''} | ${r.pc} | ${r.project} | ${r.engine || ''} | ${(r.title || '').replace(/\|/g, '/')} | ${r.sessionId || ''} | ${r.file} |\n`;
     }
     fs.writeFileSync(path.join(MEMORY_DIR, 'INDEX.md'), md);
   } catch (e) {
@@ -350,7 +352,7 @@ async function handleApi(req, res, u) {
       if (u.pathname === '/api/start') {
         if (!body.project) return json(400, { error: 'project 필요' });
         const sessionKey = crypto.randomBytes(4).toString('hex');
-        send(agent, { type: 'start_session', sessionKey, pc: body.pc, project: body.project, engine: body.engine, model: body.model, prompt: body.prompt });
+        send(agent, { type: 'start_session', sessionKey, pc: body.pc, project: body.project, engine: body.engine, model: body.model, prompt: body.prompt, resume: body.resume });
         return json(200, {
           ok: true, sessionKey,
           hint: `진행 상황: GET /api/history?pc=${body.pc}&sessionKey=${sessionKey}`,
