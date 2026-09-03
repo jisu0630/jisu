@@ -148,6 +148,7 @@ Claude 가 API 를 호출해 세션을 시작하고, history 를 조회해 결�
 이 시스템은 **웹에서 입력한 프롬프트가 각 PC에서 코드 실행으로 이어지는** 구조입니다. 토큰이 유출되면 모든 PC에서 임의 명령 실행이 가능하므로:
 
 - **허브를 공인 인터넷에 그대로 노출하지 마세요.** [Tailscale](https://tailscale.com) 같은 사설 VPN 안에서만 접근하는 구성을 강력히 권장합니다. 굳이 공개해야 하면 반드시 리버스 프록시(Caddy/nginx)로 **HTTPS/WSS** 를 씌우세요 — 평문 `ws://` 는 토큰이 그대로 노출됩니다.
+- **공용 Wi-Fi 에서 노트북으로 허브를 돌릴 때**는 `FLEET_BIND=127.0.0.1`(같은 PC 브라우저만) 또는 `FLEET_BIND=<Tailscale IP>`(tailnet 기기만)로 열어 두세요. 기본값은 모든 인터페이스(같은 망의 폰 접속용)입니다. 토큰 실패가 IP 당 10분에 20회를 넘으면 그 IP 는 자동 차단됩니다.
 - `FLEET_TOKEN` 은 충분히 길게(`openssl rand -hex 24`), 저장소에 커밋하지 마세요. (`fleet-agent.config.json` 은 `.gitignore` 처리되어 있습니다.)
 - `permissionMode` 주의: 헤드리스(`--print`) 모드에서는 권한 프롬프트에 답할 수 없어, 기본값 `acceptEdits` 에서는 파일 편집은 자동 허용되지만 임의 Bash 명령 등은 거부될 수 있습니다. `bypassPermissions` 로 바꾸면 모든 것이 허용되므로, 신뢰하는 네트워크 + 신뢰하는 사용자만 접근 가능한 환경에서만 쓰세요.
 

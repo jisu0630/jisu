@@ -11,6 +11,9 @@ import { WebSocketServer } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
+// 허브를 열 인터페이스. 기본은 모든 인터페이스(같은 망의 폰 접속용).
+// 공용 Wi-Fi 등에서는 FLEET_BIND=127.0.0.1 또는 Tailscale IP(100.x.x.x)로 제한 권장.
+const HOST = process.env.FLEET_BIND || '0.0.0.0';
 // 토큰: FLEET_TOKEN 환경변수 → .fleet-token 파일(npm run setup 이 생성) 순으로 찾는다
 const TOKEN = process.env.FLEET_TOKEN || (() => {
   try {
@@ -148,6 +151,23 @@ const agentSockets = new Map();
 const dashboards = new Set();
 /** `${pc}\u0000${sessionKey}` -> event[] */
 const buffers = new Map();
+
+// 토큰 무차별 대입 방어: IP 별로 10분 동안 실패 20회를 넘기면 그 IP 를 잠시 거부
+const authFails = new Map(); // ip -> { n, until }
+const FAIL_LIMIT = 20, FAIL_WINDOW_MS = 10 * 60_000;
+function authBlocked(ip) {
+  const f = authFails.get(ip);
+  return Boolean(f && f.n >= FAIL_LIMIT && Date.now() < f.until);
+}
+function noteAuthFail(ip) {
+  const f = authFails.get(ip) || { n: 0, until: 0 };
+  if (Date.now() > f.until) { f.n = 0; }
+  f.n += 1;
+  f.until = Date.now() + FAIL_WINDOW_MS;
+  authFails.set(ip, f);
+  if (f.n === FAIL_LIMIT) console.warn(`[auth] ${ip} 토큰 실패 ${FAIL_LIMIT}회 — 10분간 차단`);
+}
+function clientIp(req) { return req.socket?.remoteAddress || 'unknown'; }
 
 function safeTokenEqual(a) {
   if (typeof a !== 'string') return false;
@@ -330,7 +350,9 @@ async function handleApi(req, res, u) {
     res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(obj));
   };
-  if (!apiAuthed(req)) return json(401, { error: 'unauthorized' });
+  const ip = clientIp(req);
+  if (authBlocked(ip)) return json(429, { error: 'too many failed attempts' });
+  if (!apiAuthed(req)) { noteAuthFail(ip); return json(401, { error: 'unauthorized' }); }
 
   try {
     if (req.method === 'GET' && u.pathname === '/api/fleet') {
@@ -402,7 +424,10 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 wss.on('connection', (ws, req) => {
   const u = new URL(req.url, 'http://x');
   const role = u.searchParams.get('role');
+  const ip = clientIp(req);
+  if (authBlocked(ip)) { ws.close(4429, 'too many failed attempts'); return; }
   if (!safeTokenEqual(u.searchParams.get('token'))) {
+    noteAuthFail(ip);
     ws.close(4401, 'invalid token');
     return;
   }
@@ -472,6 +497,7 @@ const heartbeat = setInterval(() => {
 }, 30_000);
 wss.on('close', () => clearInterval(heartbeat));
 
-server.listen(PORT, () => {
-  console.log(`claude-fleet 허브 실행 중: http://localhost:${PORT}  (ws: /ws)`);
+server.listen(PORT, HOST, () => {
+  console.log(`claude-fleet 허브 실행 중: http://localhost:${PORT}  (bind: ${HOST}, ws: /ws)`);
+  if (HOST === '0.0.0.0') console.log('  ※ 모든 인터페이스에 열려 있습니다. 공용 망에서는 FLEET_BIND=127.0.0.1 또는 Tailscale IP 로 제한하세요.');
 });
