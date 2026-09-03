@@ -246,6 +246,8 @@
   <select id="model-select"></select>
   <label for="new-prompt">첫 프롬프트</label>
   <textarea id="new-prompt" rows="4" placeholder="예) 테스트 전부 돌리고 실패 원인 고쳐줘"></textarea>
+  <label for="new-resume">이어갈 세션 ID (선택) — 터미널에서 /status 로 확인한 ID 를 넣으면 그 대화를 이어받습니다</label>
+  <input id="new-resume" placeholder="예) 23f6d80b-175a-4be2-bf26-949b5f370d41" autocomplete="off">
   <div class="row">
     <button id="new-cancel">취소</button>
     <button class="primary" id="new-start">시작</button>
@@ -793,6 +795,7 @@ function openNewDialog(pc, project) {
   newTarget = { pc, project };
   $('new-target').textContent = `${pc} / ${project}`;
   $('new-prompt').value = '';
+  $('new-resume').value = '';
   const pcInfo = fleet.find((p) => p.name === pc);
   const hasCodex = (pcInfo?.engines || ['claude']).includes('codex');
   $('codex-radio').disabled = !hasCodex;
@@ -811,6 +814,7 @@ $('new-start').addEventListener('click', () => {
     type: 'start_session', pc: newTarget.pc, project: newTarget.project, engine,
     model: $('model-select').value || null,
     prompt: $('new-prompt').value.trim(),
+    resume: $('new-resume').value.trim() || null,
   });
   $('new-dialog').close();
 });
