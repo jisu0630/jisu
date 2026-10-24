@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>신용정보조회서 (견본)</title>
+<style>
+  :root {
+    --ink: #1f2937; --muted: #6b7280; --line: #d1d5db; --head: #f3f4f6; --accent: #1e40af;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e5e7eb; font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; color: var(--ink); font-size: 13px; }
+  .page { position: relative; width: 210mm; min-height: 297mm; margin: 24px auto; background: #fff; padding: 18mm 16mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); overflow: hidden; }
+  .watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0; }
+  .watermark span { transform: rotate(-30deg); font-size: 64px; font-weight: 800; color: rgba(220, 38, 38, .14); border: 6px solid rgba(220, 38, 38, .14); padding: 12px 36px; white-space: nowrap; letter-spacing: 4px; }
+  .content { position: relative; z-index: 1; }
+  .banner { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; padding: 8px 12px; font-size: 12px; margin-bottom: 14px; border-radius: 4px; }
+  h1 { text-align: center; font-size: 26px; letter-spacing: 10px; margin: 6px 0 4px; }
+  .sub { text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 18px; }
+  .meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  h2 { font-size: 14px; margin: 20px 0 8px; padding-left: 8px; border-left: 4px solid var(--accent); }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  th, td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--head); font-weight: 600; width: 22%; white-space: nowrap; }
+  table.list th { width: auto; text-align: center; }
+  .none { text-align: center; color: var(--muted); padding: 14px; }
+  .note { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
+  .footer { margin-top: 28px; text-align: center; font-size: 12px; line-height: 1.8; }
+  .seal { display: inline-block; margin-top: 6px; border: 2px solid #b91c1c; color: #b91c1c; border-radius: 50%; width: 64px; height: 64px; line-height: 60px; font-weight: 700; font-size: 12px; }
+  @media print { body { background: #fff; } .page { margin: 0; box-shadow: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="watermark"><span>SAMPLE · 견본</span></div>
+  <div class="content">
+    <div class="banner">본 문서는 UI/개발 테스트용 <b>견본(SAMPLE)</b>입니다. 발급기관·인적사항은 모두 가상이며 어떠한 법적 효력도 없습니다.</div>
+
+    <h1>신용정보조회서</h1>
+    <div class="sub">Credit Information Report (견본)</div>
+
+    <div class="meta">
+      <span>발급번호: SMP-2026-000000</span>
+      <span>발급일시: 2026-10-24 10:00:00</span>
+    </div>
+
+    <h2>1. 조회 대상자 정보</h2>
+    <table>
+      <tr><th>성명</th><td>홍길동</td><th>생년월일</th><td>1990-01-01</td></tr>
+      <tr><th>성별</th><td>남</td><th>조회 기준일</th><td>2026-10-24</td></tr>
+      <tr><th>조회 목적</th><td colspan="3">본인 신용정보 확인</td></tr>
+    </table>
+
+    <h2>2. 신용등급 / 신용평점</h2>
+    <table>
+      <tr><th>신용평점</th><td>해당 없음 (평가 이력 없음)</td><th>신용등급</th><td>해당 없음</td></tr>
+    </table>
+    <p class="note">※ 신용거래 이력이 없어 평점이 산출되지 않았습니다.</p>
+
+    <h2>3. 대출 현황</h2>
+    <table class="list">
+      <thead><tr><th>금융기관</th><th>대출종류</th><th>대출일</th><th>대출금액</th><th>잔액</th></tr></thead>
+      <tbody><tr><td class="none" colspan="5">조회된 내역이 없습니다.</td></tr></tbody>
+    </table>
+
+    <h2>4. 연체 정보</h2>
+    <table class="list">
+      <thead><tr><th>금융기관</th><th>연체 발생일</th><th>연체 금액</th><th>해제일</th></tr></thead>
+      <tbody><tr><td class="none" colspan="4">조회된 내역이 없습니다.</td></tr></tbody>
+    </table>
+
+    <h2>5. 보증 정보</h2>
+    <table class="list">
+      <thead><tr><th>금융기관</th><th>보증종류</th><th>보증일</th><th>보증금액</th></tr></thead>
+      <tbody><tr><td class="none" colspan="4">조회된 내역이 없습니다.</td></tr></tbody>
+    </table>
+
+    <h2>6. 신용카드 보유 현황</h2>
+    <table class="list">
+      <thead><tr><th>카드사</th><th>카드종류</th><th>발급일</th><th>상태</th></tr></thead>
+      <tbody><tr><td class="none" colspan="4">조회된 내역이 없습니다.</td></tr></tbody>
+    </table>
+
+    <h2>7. 공공정보 (채무불이행·회생·파산 등)</h2>
+    <table class="list">
+      <thead><tr><th>정보구분</th><th>등록기관</th><th>등록일</th><th>해제일</th></tr></thead>
+      <tbody><tr><td class="none" colspan="4">조회된 내역이 없습니다.</td></tr></tbody>
+    </table>
+
+    <h2>8. 신용조회 기록 (최근 3개월)</h2>
+    <table class="list">
+      <thead><tr><th>조회일</th><th>조회기관</th><th>조회목적</th></tr></thead>
+      <tbody><tr><td class="none" colspan="3">조회된 내역이 없습니다.</td></tr></tbody>
+    </table>
+
+    <p class="note">
+      ※ 본 조회서는 조회 기준일 현재 등록된 정보를 기준으로 작성되었습니다.<br>
+      ※ 본 문서는 테스트·시연 목적의 견본으로, 실제 신용정보 조회 결과가 아닙니다.
+    </p>
+
+    <div class="footer">
+      위와 같이 조회되었음을 확인합니다.<br>
+      <b>(가상) 샘플신용정보 주식회사</b><br>
+      <span class="seal">견본</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
